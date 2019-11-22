@@ -22,32 +22,39 @@ class cannyEdgeDetector:
         self.highThreshold = highthreshold
         return 
     
-    def gaussian_kernel(self, size, sigma=1):
+    def gaussian_kernel(self, img,size, sigma=1):
         size = int(size) // 2
         x, y = np.mgrid[-size:size+1, -size:size+1]
         normal = 1 / (2.0 * np.pi * sigma**2)
         g =  np.exp(-((x**2 + y**2) / (2.0*sigma**2))) * normal
-        print(g)
-        return g
+
+        gaussian_image = np.zeros(img.shape)
+        for i in range(1, img.shape[0]-1):
+            for j in range(1, img.shape[1]-1):
+                for m in range(0,size):
+                    for n in range(0,size):
+                        gaussian_image[i][j] += img[i-int(size/2)+m][j-int(size/2)+n]*g[m][n]
+        return gaussian_image
     
     def sobel_filters(self, img):
         Kx = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], np.float32)
         Ky = np.array([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], np.float32)
 
-        # Kernalx = np.zeros(len(img), len(img))
-        # Kernaly = np.zeros(len(img), len(img))
+        print(img.shape)
+        Kernalx = np.zeros(img.shape)
+        Kernaly = np.zeros(img.shape)
 
-        # for i in range(1, len(img)):
-        #     for j in range(1, len(img)):
-        #         Kernalx[i][j] = img[i-1][j+1]*-1 + img[i+1][j+1]*1 + img[i-1][j]*-2 + img[i+1][j]*2 + img[i-1][j-1]*-1 + img[i+1][j-1]*1
-        #         Kernaly[i][j] = img[i-1][j+1]*1 + img[i][j+1]*2 + img[i+1][j+1]*1 + img[i-11][j-1]*-1 + img[i][j-1]*-2 + img[i+1][j-1]*-1 
+        for i in range(1, img.shape[0]-1):
+            for j in range(1, img.shape[1]-1):
+                Kernalx[i][j] = img[i-1][j+1]*-1 + img[i-1][j]*-2 + img[i-1][j-1]*-1 + img[i+1][j+1]*1 + img[i+1][j]*2 + img[i+1][j-1]*1
+                Kernaly[i][j] = img[i-1][j+1]*1 + img[i][j+1]*2 + img[i+1][j+1]*1 + img[i-1][j-1]*-1 + img[i][j-1]*-2 + img[i+1][j-1]*-1 
 
-        Ix = ndimage.filters.convolve(img, Kx)
-        Iy = ndimage.filters.convolve(img, Ky)
+        # Ix = ndimage.filters.convolve(img, Kx)
+        # Iy = ndimage.filters.convolve(img, Ky)
 
-        G = np.hypot(Ix, Iy)
+        G = np.hypot(Kernalx, Kernaly)
         G = G / G.max() * 255
-        theta = np.arctan2(Iy, Ix)
+        theta = np.arctan2(Kernalx, Kernaly)
         return (G, theta)
     
 
@@ -138,7 +145,7 @@ class cannyEdgeDetector:
         imgs_final = []
         for i, img in enumerate(self.imgs):   
             start = timer() 
-            self.img_smoothed = convolve(img, self.gaussian_kernel(self.kernel_size, self.sigma))
+            self.img_smoothed = self.gaussian_kernel(img, self.kernel_size, self.sigma)
             gauss = timer() - start
             self.gradientMat, self.thetaMat = self.sobel_filters(self.img_smoothed)
             grad = timer() - start - gauss
