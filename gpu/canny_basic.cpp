@@ -3,7 +3,7 @@
 #include<string>
 #include<iostream> 
 #include<stdlib.h>
-//#include <cublas.h> //CUDA
+#include <cublas.h> //CUDA
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -37,8 +37,8 @@ int main(){
 	}
 
 	//Kernel Setup
-	int kernel_size = 3
-	int padd = kernel_size/2
+	int kernel_size = 3;
+	int padd = kernel_size/2;
 
 	//GPU setup
 	// dim3 dimGrid(height-2*padd);
