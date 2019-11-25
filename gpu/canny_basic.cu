@@ -15,7 +15,7 @@ __global__ void convolution_kernel(int *img, int *conv, int *h, int *w, int *pad
 	int my_y = blockIdx.x*blockDim.x;
 	int x_gradient[] = {-1, 0, 1, -2, 0, 2, -1, 0, 1};
 
-	conv[my_y*(1+*padding) + my_x + *padding] = img[my_y*(*padding-1)+my_x+*padding-1]*x_gradient[0] +  img[my_y*(*padding-1)+my_x+*padding]*x_gradient[1] + img[my_y*(*padding-1)+my_x+*padding+1]*x_gradient[2] +  
+	conv[my_y*(*padding) + my_x + *padding] = img[my_y*(*padding-1)+my_x+*padding-1]*x_gradient[0] +  img[my_y*(*padding-1)+my_x+*padding]*x_gradient[1] + img[my_y*(*padding-1)+my_x+*padding+1]*x_gradient[2] +  
 												img[my_y*(*padding)+my_x+*padding-1]*x_gradient[3] +  img[my_y*(*padding)+my_x+*padding]*x_gradient[4] + img[my_y*(*padding)+my_x+*padding+1]*x_gradient[5] + 
 												img[my_y*(*padding+1)+my_x+*padding-1]*x_gradient[6] +  img[my_y*(*padding+1)+my_x+*padding]*x_gradient[7] + img[my_y*(*padding+1)+my_x+*padding+1]*x_gradient[8]; 
 
@@ -84,6 +84,11 @@ int main(){
 
 	namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
     imshow( "Display window", gray_img);                   // Show our image inside it.
+
+    Mat conv_img_cv = Mat(height, width, CV_16I, conv_img);
+    //memcpy(conv_img_cv.data, conv_img, height*width*sizeof(int));
+    namedWindow( "Convolution Image", WINDOW_AUTOSIZE);
+    imshow("Convolution Image", conv_img_cv);
 
     waitKey(0);                                          // Wait for a keystroke in the window
 	
