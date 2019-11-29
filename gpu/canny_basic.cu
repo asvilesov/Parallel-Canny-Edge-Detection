@@ -90,15 +90,20 @@ __global__ void gaussian_filter(int *img, int *conv, int *padding){
 
 }
 
-__global__ void non_max_suppression(int *img, int *phase, int *output, int *padding){
+__global__ void non_max_suppression(int *img, int *phase, int *padding){
 	int my_x = threadIdx.x;
 	int my_y = (blockIdx.x+*padding)*(blockDim.x+2*(*padding));
 
-	int phase_to_pix[8][4] = {{0,1,0,-1} , {-1,1,1,-1}, {-1,1,1,-1}, {1,0,-1,0}, {1,0,-1,0}, {1,1,-1,-1}, {1,1,-1,-1}, {0,1,0,-1}};
+	int phase_to_pix[8][4] = {{0,1,0,-1} , {-1,1,1,-1}, {-1,1,1,-1}, {1,0,-1,0}, {1,0,-1,0}, {1,1,-1,-1}, {1,1,-1,-1}, {0,1,0,-1}}; //{(x1,y1),(x2,y2)} for each possible direction
 
-	//Finish with %22.5
+	int compare_value = img[my_y+my_x+*padding];
+	float i = phase[my_y+my_x+*padding];
+	int val = int(i/22.5);
 
+	if( (compare_value < img[(my_y+blockDim.x*phase_to_pix[val][1])+my_x+*padding + phase_to_pix[val][0]]) || (compare_value < img[(my_y+blockDim.x*phase_to_pix[val][2])+my_x+*padding + phase_to_pix[val][3]])){
+		img[my_y+my_x+*padding] = 0;
 	}
+}
 
 
 
@@ -180,12 +185,8 @@ int main(){
 	cudaMemcpy(phase_img, gpu_phase_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
 	// invoke non-max suppression
-	// map<int, pixel_angle> angle_to_pixel_loc;
-	// pixel_angle NS, EW, NESW, NWSE;
-	// NS.pixel_loc = {0,1,0,-1};
-	// EW.pixel_loc = {1,0,-1,0};
-	// NESW.pixel_loc = {1,1,-1,-1};
-	// NWSE.pixel_loc = {-1,1,1,-1};
+	//non_max_suppression<<<dimGrid, dimBlock>>> (gpu_conv_img, gpu_phase_img, gpu_padd);
+	//cudaMemcpy(conv_img, gpu_conv_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
 
 	printf("%i\n", phase_img[1000]);
