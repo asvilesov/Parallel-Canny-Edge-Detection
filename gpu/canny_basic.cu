@@ -80,9 +80,15 @@ __global__ void gaussian_filter(int *img, int *conv, int *padding){
 	int my_x = threadIdx.x;
 	int my_y = (blockIdx.x+*padding)*(blockDim.x+2*(*padding));
 	
-	float gauss[] = {0.077847,	0.123317,	0.077847,
-					0.123317,	0.195346,	0.123317,
-					0.077847,	0.123317,	0.077847};
+	//std 1
+	// float gauss[] = {0.077847,	0.123317,	0.077847,
+	// 				0.123317,	0.195346,	0.123317,
+	// 				0.077847,	0.123317,	0.077847};
+
+	//std 2
+	float gauss[] = {0.102059,	0.115349,	0.102059,
+					0.115349,	0.130371,	0.115349,
+					0.102059,	0.115349,	0.102059};
 
 	float gauss_val = 	img[(my_y-blockDim.x+2*(*padding))+my_x+*padding-1]*gauss[0] +  img[(my_y-blockDim.x+2*(*padding))+my_x+*padding]*gauss[1] + img[(my_y-blockDim.x+2*(*padding))+my_x+*padding+1]*gauss[2] +  
 						img[my_y+my_x+*padding-1]*gauss[3] +  img[my_y+my_x+*padding]*gauss[4] + img[my_y+my_x+*padding+1]*gauss[5] + 
@@ -100,9 +106,9 @@ __global__ void non_max_suppression(int *img, int *output, int *phase, int *padd
 
 	int compare_value = img[my_y+my_x+*padding];
 	float i = phase[my_y+my_x+*padding];
-	int val = int(i/22.5);
+	int val = (int)(i/22.5);
 
-	if( (compare_value < img[(my_y+blockDim.x*phase_to_pix[val][1])+my_x+*padding + phase_to_pix[val][0]]) || (compare_value < img[(my_y+blockDim.x*phase_to_pix[val][2])+my_x+*padding + phase_to_pix[val][3]])){
+	if( (compare_value < img[(my_y+blockDim.x*phase_to_pix[val][1])+my_x+*padding + phase_to_pix[val][0]]) || (compare_value < img[(my_y+blockDim.x*phase_to_pix[val][3])+my_x+*padding + phase_to_pix[val][2]])){
 		output[my_y+my_x+*padding] = 0;
 	}
 }
@@ -164,7 +170,8 @@ int main(){
 	cudaEventCreate(&stop);
 
 	//image setup
-	Mat img_cv = imread("test.png");
+	//Mat img_cv = imread("test.png");
+	Mat img_cv = imread("4.jpg");
 	Mat gray_img;
 	cvtColor(img_cv, gray_img, CV_BGR2GRAY);
 	printf("%s", type2str(gray_img.type()).c_str());
@@ -172,7 +179,7 @@ int main(){
 	int height = img_cv.rows;
 	int width = img_cv.cols;
 	//Canny Edge Filter Parameters
-	int high = 50;
+	int high = 30;
 	int low = 10;
 	int *h_p = &high;
 	int *l_p = &low;
@@ -212,11 +219,14 @@ int main(){
 
 
 	cudaMemcpy(gpu_img, img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
-	cudaMemcpy(gpu_conv_img, conv_img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_conv_img, img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
 	cudaMemcpy(gpu_phase_img, phase_img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
 	cudaMemcpy(gpu_padd, padd_p, sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(gpu_h, h_p, sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(gpu_w, l_p, sizeof(int), cudaMemcpyHostToDevice);
+
+	//start timer
+	cudaEventRecord(start, 0);
 
 	//invoke Gauss Kernel
 	gaussian_filter<<<dimGrid, dimBlock>>> (gpu_img, gpu_conv_img, gpu_padd);
@@ -234,11 +244,11 @@ int main(){
 	non_max_suppression<<<dimGrid, dimBlock>>> (gpu_img, gpu_new_img, gpu_phase_img, gpu_padd);
 	cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
-	// // // invoke thresholding
+	// // // // invoke thresholding
 	thresholding<<<dimGrid, dimBlock>>> (gpu_new_img, gpu_padd, gpu_h, gpu_w);
 	cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
-	// invoke hysteresis
+	// // invoke hysteresis
 	int count = 0;
 	while(flag == 1){
 		count++;
@@ -248,7 +258,18 @@ int main(){
 		cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 	}
 
-	printf("Flag is: %i and count is %i\n", flag, count);
+	// printf("Flag is: %i and count is %i\n", flag, count);
+
+	cudaEventRecord(stop, 0);
+
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&time_execute, start, stop);
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
+
+	printf("Parallel Time: %f m-seconds vs. Serial Time: 0.5\n Total speedup: %f", time_execute, (float)0.5/time_execute*1000);
+
+
 
 
 	printf("%i\n", phase_img[1000]);
