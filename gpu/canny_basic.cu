@@ -14,6 +14,8 @@
 using namespace cv;
 using namespace std;
 
+__device__ __managed__ int flag = 1; // 0 if unchanged, 1 if changed in the Hystersis+thresholding function
+
 string type2str(int type) {
   string r;
 
@@ -90,7 +92,7 @@ __global__ void gaussian_filter(int *img, int *conv, int *padding){
 
 }
 
-__global__ void non_max_suppression(int *img, int *phase, int *padding){
+__global__ void non_max_suppression(int *img, int *output, int *phase, int *padding){ //this might have an error, if it is changing in place... should be reading from steady_state image
 	int my_x = threadIdx.x;
 	int my_y = (blockIdx.x+*padding)*(blockDim.x+2*(*padding));
 
@@ -101,7 +103,45 @@ __global__ void non_max_suppression(int *img, int *phase, int *padding){
 	int val = int(i/22.5);
 
 	if( (compare_value < img[(my_y+blockDim.x*phase_to_pix[val][1])+my_x+*padding + phase_to_pix[val][0]]) || (compare_value < img[(my_y+blockDim.x*phase_to_pix[val][2])+my_x+*padding + phase_to_pix[val][3]])){
+		output[my_y+my_x+*padding] = 0;
+	}
+}
+
+__global__ void thresholding(int *img, int *padding, int *high, int *low){
+	int my_x = threadIdx.x;
+	int my_y = (blockIdx.x+*padding)*(blockDim.x+2*(*padding));
+
+	if(img[my_y+my_x+*padding] > *high)
+		img[my_y+my_x+*padding] = 255;
+	else if(img[my_y+my_x+*padding] < *low)
 		img[my_y+my_x+*padding] = 0;
+	else
+		img[my_y+my_x+*padding] = 100;
+}
+
+__global__ void hystersis(int*img, int*padding){
+	int my_x = threadIdx.x;
+	int my_y = (blockIdx.x+*padding)*(blockDim.x+2*(*padding));
+
+	if(img[my_y+my_x+*padding] == 100){
+		if( (img[(my_y-blockDim.x+2*(*padding))+my_x+*padding-1] == 255) || (img[(my_y-blockDim.x+2*(*padding))+my_x+*padding]== 255) || 
+			(img[(my_y-blockDim.x+2*(*padding))+my_x+*padding+1] == 255) || (img[my_y+my_x+*padding-1] == 255) ||
+			(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1] == 255) || (img[my_y+my_x+*padding+1] == 255) ||
+			(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding] == 255) || (img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]== 255)  ){
+
+			img[my_y+my_x+*padding] = 255;
+			flag = 1;
+		}
+
+		if( (img[(my_y-blockDim.x+2*(*padding))+my_x+*padding-1] == 0) || (img[(my_y-blockDim.x+2*(*padding))+my_x+*padding]== 0) || 
+			(img[(my_y-blockDim.x+2*(*padding))+my_x+*padding+1] == 0) || (img[my_y+my_x+*padding-1] == 0) ||
+			(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1] == 0) || (img[my_y+my_x+*padding+1] == 0) ||
+			(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding] == 0) || (img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]== 0)  ){
+
+			img[my_y+my_x+*padding] = 0;
+			flag = 1;
+		}
+
 	}
 }
 
@@ -131,8 +171,11 @@ int main(){
 
 	int height = img_cv.rows;
 	int width = img_cv.cols;
-	int *h_p = &height;
-	int *w_p = &width;
+	//Canny Edge Filter Parameters
+	int high = 50;
+	int low = 10;
+	int *h_p = &high;
+	int *l_p = &low;
 
 	int *img = new int[height*width];
 	int *conv_img = new int[height*width];
@@ -173,20 +216,39 @@ int main(){
 	cudaMemcpy(gpu_phase_img, phase_img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
 	cudaMemcpy(gpu_padd, padd_p, sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(gpu_h, h_p, sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpy(gpu_w, w_p, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_w, l_p, sizeof(int), cudaMemcpyHostToDevice);
 
 	//invoke Gauss Kernel
 	gaussian_filter<<<dimGrid, dimBlock>>> (gpu_img, gpu_conv_img, gpu_padd);
 	cudaMemcpy(conv_img, gpu_conv_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
 	// //invoke Sobel Kernel
-	convolution_kernel<<<dimGrid, dimBlock>>> (gpu_img, gpu_conv_img, gpu_phase_img, gpu_h, gpu_w, gpu_padd);
-	cudaMemcpy(conv_img, gpu_conv_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+	convolution_kernel<<<dimGrid, dimBlock>>> (gpu_conv_img, gpu_img, gpu_phase_img, gpu_h, gpu_w, gpu_padd);
+	cudaMemcpy(conv_img, gpu_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 	cudaMemcpy(phase_img, gpu_phase_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
-	// invoke non-max suppression
-	//non_max_suppression<<<dimGrid, dimBlock>>> (gpu_conv_img, gpu_phase_img, gpu_padd);
-	//cudaMemcpy(conv_img, gpu_conv_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+	// // // invoke non-max suppression
+	int *gpu_new_img;
+	cudaMalloc((void**)&gpu_new_img, sizeof(int)*height*width);
+	cudaMemcpy(gpu_new_img, conv_img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
+	non_max_suppression<<<dimGrid, dimBlock>>> (gpu_img, gpu_new_img, gpu_phase_img, gpu_padd);
+	cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+
+	// // // invoke thresholding
+	thresholding<<<dimGrid, dimBlock>>> (gpu_new_img, gpu_padd, gpu_h, gpu_w);
+	cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+
+	// invoke hysteresis
+	int count = 0;
+	while(flag == 1){
+		count++;
+		flag = 0;
+		hystersis<<<dimGrid, dimBlock>>> (gpu_new_img, gpu_padd);
+		cudaDeviceSynchronize();
+		cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+	}
+
+	printf("Flag is: %i and count is %i\n", flag, count);
 
 
 	printf("%i\n", phase_img[1000]);
