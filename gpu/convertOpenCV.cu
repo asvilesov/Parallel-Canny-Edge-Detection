@@ -15,7 +15,7 @@ using namespace cv;
 //Should take the folder path of the images and of the folder to save the grayscale photos into
 void convertToOpenCV(String folderpath, string saveFolder) {		//void for now, idk what it should return or if we will just pass the data by calling another function
 
-    String folderpath = "../images/512x512/*.jpg"  // This is temporary, whatever calls the function should give the folder
+    folderpath = "../images/512x512/*.jpg";  // This is temporary, whatever calls the function should give the folder
                                             // That allows us to test on different folders and not hardcode it
     vector<String> filenames;
     cv::glob(folderpath, filenames);
@@ -23,7 +23,7 @@ void convertToOpenCV(String folderpath, string saveFolder) {		//void for now, id
     for (size_t i = 0; i < filenames.size(); i++)
     {
         //Read image in to program in color
-        Mat im = imread(filenames[i]), 1;
+        Mat im = imread(filenames[i]);//, 1;
 
         //Matrix to hold the images
         Mat grayscaleImage;
@@ -37,5 +37,9 @@ void convertToOpenCV(String folderpath, string saveFolder) {		//void for now, id
 
         imwrite(save, grayscaleImage);
     }
+
+}
+
+int main(){
 
 }

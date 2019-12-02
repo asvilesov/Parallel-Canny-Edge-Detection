@@ -1,5 +1,3 @@
-
-
 #include<string>
 #include<map>
 #include<iostream> 
@@ -165,33 +163,9 @@ __global__ void clean_up(int *img, int* padding){
 	}
 }
 
-
-
-
-// }
-
-struct pixel_angle{
-	int pixel_loc[4];
-};
-
-
-int main(){
-
-	//timing setup
-	cudaEvent_t start, stop;
-	float time_execute = 0;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-
-	//image setup
-	//Mat img_cv = imread("test.png");
-	Mat img_cv = imread("4.jpg");
-	Mat gray_img;
-	cvtColor(img_cv, gray_img, CV_BGR2GRAY);
-	printf("%s", type2str(gray_img.type()).c_str());
-
-	int height = img_cv.rows;
-	int width = img_cv.cols;
+float canny_edge_detector(Mat gray_img){
+	int height = gray_img.rows;
+	int width = gray_img.cols;
 	//Canny Edge Filter Parameters
 	int high = 30;
 	int low = 10;
@@ -202,6 +176,7 @@ int main(){
 	int *conv_img = new int[height*width];
 	int *phase_img = new int[height*width];
 
+	//Convert to 1D array
 	int i = 0;
 	for(i = 0; i < height*width; i++){
 		img[i] = gray_img.at<uchar>(int(i/width), i%width);
@@ -212,12 +187,11 @@ int main(){
 	int padd = (kernel_size-1)/2;
 	int *kernel_p = &kernel_size;
 	int *padd_p = &padd;
-	printf("%i\n", *padd_p);
 
 	//GPU setup
 	dim3 dimGrid(height-2*padd);
 	dim3 dimBlock(width-2*padd);
-
+	//Malloc
 	int *gpu_img, *gpu_conv_img, *gpu_phase_img, *gpu_padd, *gpu_h, *gpu_w;
 	cudaMalloc((void**)&gpu_img, sizeof(int)*height*width);
 	cudaMalloc((void**)&gpu_conv_img, sizeof(int)*height*width);
@@ -225,13 +199,7 @@ int main(){
 	cudaMalloc((void**)&gpu_padd, sizeof(int));
 	cudaMalloc((void**)&gpu_h, sizeof(int));
 	cudaMalloc((void**)&gpu_w, sizeof(int));
-	// map<int,int*> gpu_angle_pix;
-	// map<int,int*> angle_to_pixel_loc;
-	// int NS[] {0,1,0,-1};
-	// angle_to_pixel_loc[0] = NS;
-	// cudaMalloc((void**)&gpu_angle_pix, sizeof(angle_to_pixel_loc));
-
-
+	//Send to GPU
 	cudaMemcpy(gpu_img, img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
 	cudaMemcpy(gpu_conv_img, img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
 	cudaMemcpy(gpu_phase_img, phase_img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
@@ -239,95 +207,67 @@ int main(){
 	cudaMemcpy(gpu_h, h_p, sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(gpu_w, l_p, sizeof(int), cudaMemcpyHostToDevice);
 
+	//timing setup
+	cudaEvent_t start, stop;
+	float time_execute = 0;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
 	//start timer
 	cudaEventRecord(start, 0);
 
+	//----------- Start Canny Algorithm -----------
+
 	//invoke Gauss Kernel
 	gaussian_filter<<<dimGrid, dimBlock>>> (gpu_img, gpu_conv_img, gpu_padd);
-	//cudaMemcpy(conv_img, gpu_conv_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
 	//invoke Sobel Kernel
 	convolution_kernel<<<dimGrid, dimBlock>>> (gpu_conv_img, gpu_img, gpu_phase_img, gpu_h, gpu_w, gpu_padd);
 	cudaMemcpy(conv_img, gpu_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
-	//cudaMemcpy(phase_img, gpu_phase_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
-	// // // // invoke non-max suppression
+	// invoke non-max suppression
 	int *gpu_new_img;
 	cudaMalloc((void**)&gpu_new_img, sizeof(int)*height*width);
 	cudaMemcpy(gpu_new_img, conv_img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
 	non_max_suppression<<<dimGrid, dimBlock>>> (gpu_img, gpu_new_img, gpu_phase_img, gpu_padd);
-	//cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
-	// // // // // invoke thresholding
+	// invoke thresholding
 	thresholding<<<dimGrid, dimBlock>>> (gpu_new_img, gpu_padd, gpu_h, gpu_w);
 	cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
-	// // invoke hysteresis
+	// invoke hysteresis
 	int count = 0;
 	while(flag == 1){
 		count++;
 		flag = 0;
 		hystersis<<<dimGrid, dimBlock>>> (gpu_new_img, gpu_padd);
 		cudaDeviceSynchronize();
-		//cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 	}
 
 	// cleanup Image
 	clean_up<<<dimGrid, dimBlock>>> (gpu_new_img, gpu_padd);
 	cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
-	printf("Flag is: %i and count is %i\n", flag, count);
+	//----------- End Canny Algorithm -----------
 
 	cudaEventRecord(stop, 0);
-
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time_execute, start, stop);
 	cudaEventDestroy(start);
 	cudaEventDestroy(stop);
 
-	printf("Parallel Time: %f m-seconds vs. Serial Time: 0.5\n Total speedup: %f", time_execute, (float)0.5/time_execute*1000);
-
-
-	// float test;
-	// for(i = 3500; i < 3800; i++){
-	// 	test = phase_img[i]/22.5;
-	// 	printf("The phase at pixel 1000: %i with modulus of %f and int of %i \n", phase_img[i], test, (int)test);
-	// }
-
-
-
-
-
-
-	//find max element
-	printf("%i\n", *max_element(conv_img, conv_img + height*width));
-
-
-	//printf("%i\n", conv_img[1]);
-
-
 	namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
     imshow( "Display window", gray_img);                   // Show our image inside it.
 
-    //Mat conv_img_cv = Mat(1, width, CV_8U, conv_img, sizeof(int)*width);
-    //memcpy(conv_img_cv.data, conv_img, height*width*sizeof(int));
     for(i = 0; i < height*width; i++){
 		gray_img.at<uchar>(int(i/width), i%width) = conv_img[i];
 	}
+
     namedWindow( "Convolution Image", WINDOW_AUTOSIZE);
     imshow("Convolution Image", gray_img);
 
-    //printf("%s", type2str(conv_img.type()).c_str());
+    waitKey(0); // Wait for a keystroke in the window
 
-    waitKey(0);                                          // Wait for a keystroke in the window
-	
-    printf("Image size: %i %i \n", height, width);
-	printf("Pixel at [0,1]: %i\n", img_cv.at<Vec3b>(0,1)[1]);
-
-	cudaError_t error = cudaGetLastError();
-	printf("error: %s\n", cudaGetErrorString(error));
-
-
+    //Deallocate all memory
 	delete[] img;
 	delete[] conv_img;
 	delete[] phase_img;
@@ -339,5 +279,21 @@ int main(){
 	cudaFree(gpu_phase_img);
 	cudaFree(gpu_new_img);
 
-	return 0;
+	return time_execute;
 }
+
+
+
+// int main(){
+
+// 	//image setup
+	
+// 	//Mat img_cv = imread("test.png");
+// 	Mat img_cv = imread("4.jpg");
+// 	Mat gray_img;
+// 	cvtColor(img_cv, gray_img, CV_BGR2GRAY);
+
+
+// 	printf("Total time of execution: %f\n", canny_edge_detector(gray_img));
+	
+// }

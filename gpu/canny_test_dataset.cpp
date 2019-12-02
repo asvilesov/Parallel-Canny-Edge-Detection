@@ -1,5 +1,3 @@
-
-
 #include<string>
 #include<map>
 #include<iostream> 
@@ -163,6 +161,123 @@ __global__ void clean_up(int *img, int* padding){
 	if(img[my_y+my_x+*padding] == 100){ //if weak
 		img[my_y+my_x+*padding] = 0;
 	}
+}
+
+int canny_edge_detector(Mat gray_img){
+	int height = gray_img.rows;
+	int width = gray_img.cols;
+	//Canny Edge Filter Parameters
+	int high = 30;
+	int low = 10;
+	int *h_p = &high;
+	int *l_p = &low;
+
+	int *img = new int[height*width];
+	int *conv_img = new int[height*width];
+	int *phase_img = new int[height*width];
+
+	//Convert to 1D array
+	int i = 0;
+	for(i = 0; i < height*width; i++){
+		img[i] = gray_img.at<uchar>(int(i/width), i%width);
+	}
+
+	//Kernel Setup
+	int kernel_size = 3;
+	int padd = (kernel_size-1)/2;
+	int *kernel_p = &kernel_size;
+	int *padd_p = &padd;
+	printf("%i\n", *padd_p);
+
+	//GPU setup
+	dim3 dimGrid(height-2*padd);
+	dim3 dimBlock(width-2*padd);
+	//Malloc
+	int *gpu_img, *gpu_conv_img, *gpu_phase_img, *gpu_padd, *gpu_h, *gpu_w;
+	cudaMalloc((void**)&gpu_img, sizeof(int)*height*width);
+	cudaMalloc((void**)&gpu_conv_img, sizeof(int)*height*width);
+	cudaMalloc((void**)&gpu_phase_img, sizeof(int)*height*width);
+	cudaMalloc((void**)&gpu_padd, sizeof(int));
+	cudaMalloc((void**)&gpu_h, sizeof(int));
+	cudaMalloc((void**)&gpu_w, sizeof(int));
+	//Send to GPU
+	cudaMemcpy(gpu_img, img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_conv_img, img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_phase_img, phase_img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_padd, padd_p, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_h, h_p, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_w, l_p, sizeof(int), cudaMemcpyHostToDevice);
+
+	//start timer
+	cudaEventRecord(start, 0);
+
+	//----------- Start Canny Algorithm -----------
+
+	//invoke Gauss Kernel
+	gaussian_filter<<<dimGrid, dimBlock>>> (gpu_img, gpu_conv_img, gpu_padd);
+
+	//invoke Sobel Kernel
+	convolution_kernel<<<dimGrid, dimBlock>>> (gpu_conv_img, gpu_img, gpu_phase_img, gpu_h, gpu_w, gpu_padd);
+	cudaMemcpy(conv_img, gpu_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+
+	// invoke non-max suppression
+	int *gpu_new_img;
+	cudaMalloc((void**)&gpu_new_img, sizeof(int)*height*width);
+	cudaMemcpy(gpu_new_img, conv_img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
+	non_max_suppression<<<dimGrid, dimBlock>>> (gpu_img, gpu_new_img, gpu_phase_img, gpu_padd);
+
+	// invoke thresholding
+	thresholding<<<dimGrid, dimBlock>>> (gpu_new_img, gpu_padd, gpu_h, gpu_w);
+	cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+
+	// invoke hysteresis
+	int count = 0;
+	while(flag == 1){
+		count++;
+		flag = 0;
+		hystersis<<<dimGrid, dimBlock>>> (gpu_new_img, gpu_padd);
+		cudaDeviceSynchronize();
+	}
+
+	// cleanup Image
+	clean_up<<<dimGrid, dimBlock>>> (gpu_new_img, gpu_padd);
+	cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+
+	//----------- End Canny Algorithm -----------
+
+	cudaEventRecord(stop, 0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&time_execute, start, stop);
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
+
+	printf("Parallel Time: %f m-seconds vs. Serial Time: 0.5\n Total speedup: %f", time_execute, (float)0.5/time_execute*1000);
+
+	namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
+    imshow( "Display window", gray_img);                   // Show our image inside it.
+
+    for(i = 0; i < height*width; i++){
+		gray_img.at<uchar>(int(i/width), i%width) = conv_img[i];
+	}
+
+    namedWindow( "Convolution Image", WINDOW_AUTOSIZE);
+    imshow("Convolution Image", gray_img);
+
+
+    waitKey(0); // Wait for a keystroke in the window
+
+    //Deallocate all memory
+	delete[] img;
+	delete[] conv_img;
+	delete[] phase_img;
+	cudaFree(gpu_img);
+	cudaFree(gpu_conv_img);
+	cudaFree(gpu_padd);
+	cudaFree(gpu_h);
+	cudaFree(gpu_w);
+	cudaFree(gpu_phase_img);
+	cudaFree(gpu_new_img);
+
 }
 
 
