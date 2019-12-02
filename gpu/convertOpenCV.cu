@@ -15,7 +15,7 @@ using namespace cv;
 //Should take the folder path of the images and of the folder to save the grayscale photos into
 void convertToOpenCV(String folderpath, string saveFolder) {		//void for now, idk what it should return or if we will just pass the data by calling another function
 
-    folderpath = "../images/512x512/*.jpg";  // This is temporary, whatever calls the function should give the folder
+    folderpath = "../images/64x64/*.jpg";  // This is temporary, whatever calls the function should give the folder
                                             // That allows us to test on different folders and not hardcode it
     vector<String> filenames;
     cv::glob(folderpath, filenames);
@@ -33,13 +33,14 @@ void convertToOpenCV(String folderpath, string saveFolder) {		//void for now, id
         String save = saveFolder + "/" + filenames[i] + "_grey";
 
         //Can run function on the image here
-        //printf("Total time of execution: %f\n", canny_edge_detector(gray_img));
+        //printf("Pixel at [0,1]: %i\n", grayscaleImage.at<uchar>(5, 5));
+        printf("Total time of execution: %f\n", canny_edge_detector(grayscaleImage));
 
-        imwrite(save, grayscaleImage);
+        //imwrite(save, grayscaleImage);
     }
 
 }
 
 int main(){
-
+    convertToOpenCV("hi", "hi");
 }

@@ -138,14 +138,14 @@ __global__ void hystersis(int*img, int*padding){
 		}
 
 		//Should this be an or or and and operator?
-		if( (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding-1] == 0) && (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding]== 0) && 
-			(img[(my_y-blockDim.x-2*(*padding))+my_x+*padding+1] == 0) && (img[my_y+my_x+*padding-1] == 0) &&
-			(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1] == 0) && (img[my_y+my_x+*padding+1] == 0) &&
-			(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding] == 0) && (img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]== 0)){
-		// if( (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding-1] == 0) || (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding]== 0) || 
-		// 	(img[(my_y-blockDim.x-2*(*padding))+my_x+*padding+1] == 0) || (img[my_y+my_x+*padding-1] == 0) ||
-		// 	(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1] == 0) || (img[my_y+my_x+*padding+1] == 0) ||
-		// 	(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding] == 0) || (img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]== 0)){
+		// if( (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding-1] == 0) && (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding]== 0) && 
+		// 	(img[(my_y-blockDim.x-2*(*padding))+my_x+*padding+1] == 0) && (img[my_y+my_x+*padding-1] == 0) &&
+		// 	(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1] == 0) && (img[my_y+my_x+*padding+1] == 0) &&
+		// 	(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding] == 0) && (img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]== 0)){
+		if( (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding-1] == 0) || (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding]== 0) || 
+			(img[(my_y-blockDim.x-2*(*padding))+my_x+*padding+1] == 0) || (img[my_y+my_x+*padding-1] == 0) ||
+			(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1] == 0) || (img[my_y+my_x+*padding+1] == 0) ||
+			(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding] == 0) || (img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]== 0)){
 
 			img[my_y+my_x+*padding] = 0;
 			flag = 1;
