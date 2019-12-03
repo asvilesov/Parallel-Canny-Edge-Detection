@@ -60,42 +60,69 @@ void gaussian_kernel(float** gauss, int padd, float sigma){
 }
 
 
+void gaussian_blur(float **img, float **blur_img, float **gauss, int h, int w, int k_size){
+    int padd = k_size/2;
+    for (int i=padd; i<h-padd; i++){
+        for (int j=padd; j<w-padd; j++){
+            for(int k_i=-padd; k_i<=padd; k_i++){
+                for(int k_j=-padd; k_j<=padd; k_j++){
+                    blur_img[i][j] += img[i+k_i][j+k_j]*gauss[k_i+padd][k_j+padd];
+                }
+            }
+        }
+    }
+    return;
+}
+
+
+void visualize(float ** raw_img, int height, int width){
+	// //create new img
+	Mat img(height, width, CV_8U);
+	uint8_t *myData = img.data;
+ //    printf("Image size: %i %i \n", blurred_img.rows, blurred_img.cols);
+ //    string ty2 =  type2str( blurred_img.type() );
+	// cout << "type: " << ty2 << endl;	
+	for(size_t i = 0; i < height; i++){
+		for(size_t j = 0; j < width; j++){
+			myData[i*height + j] = (int) raw_img[i][j];	
+		}
+	}
+	namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
+    imshow( "Display window", img);                   // Show our image inside it.
+    waitKey(0);                                          // Wait for a keystroke in the window
+	return;
+}
+
 int main(){
 
 
 	//image setup
-	Mat img = imread("test.png");
+	Mat cv_img = imread("test.png");
 	Mat gray_img;
-	cvtColor(img, gray_img, CV_BGR2GRAY);
+	cvtColor(cv_img, gray_img, CV_BGR2GRAY);
 
-	int height = img.rows;
-	int width = img.cols;
+	int height = cv_img.rows;
+	int width = cv_img.cols;
 
 	//Kernel Setup
-	int kernel_size = 3;
+	int kernel_size = 5;
 	int padd = kernel_size/2;
 
-	namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
-    imshow( "Display window", gray_img);                   // Show our image inside it.
+	// namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
+ //    imshow( "Display window", gray_img);                   // Show our image inside it.
 
-    waitKey(0);                                          // Wait for a keystroke in the window
+ //    waitKey(0);                                          // Wait for a keystroke in the window
 	
     printf("Image size: %i %i \n", height, width);
     string ty1 =  type2str( gray_img.type() );
 	cout << "type: " << ty1 << endl;	
 	// printf("%i \n", img.at<Vec3b>(1,1)[1]);
 
-	Mat blurred_img(height, width, CV_8U);
-
-    printf("Image size: %i %i \n", blurred_img.rows, blurred_img.cols);
-    string ty2 =  type2str( blurred_img.type() );
-	cout << "type: " << ty2 << endl;	
-
+// create kernel
     float ** gauss = new float*[kernel_size];
     for(size_t i = 0; i < kernel_size; ++i){
     	gauss[i] = new float[kernel_size];
     }
-
     gaussian_kernel(gauss, padd, 1.4);
     for(int i = 0; i < kernel_size; ++i){
 	    for(int j = 0; j < kernel_size; ++j){
@@ -105,6 +132,32 @@ int main(){
 	    printf("\n");
 	}
 
+//create 2D array
+	float ** img = new float*[height];
+	float **blur_img = new float*[height];
+	//float *_img = new float[height*width];
+
+    for(size_t i = 0; i < height; ++i){
+    	img[i] = new float[width];
+    	blur_img[i] = new float[width];
+    }
+
+	for(size_t i = 0; i < height; i++){
+		for(size_t j = 0; j < width; j++){
+			img[i][j] = gray_img.at<uchar>(i, j);
+			blur_img[i][j] = 0;
+		}
+	}
+
+	gaussian_blur(img, blur_img, gauss, height, width, kernel_size);
+	visualize(blur_img, height, width);
+
+
+	for(size_t i = 0; i < height; ++i){
+		delete img[i];
+	}
+	delete img;
+//delete kernel
 	for(size_t i = 0; i < kernel_size; ++i){
 		delete gauss[i];
 	}
