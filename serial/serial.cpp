@@ -5,6 +5,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <cmath>
 
 using namespace cv;
 using namespace std;
@@ -33,6 +34,31 @@ string type2str(int type) {
 
   return r;
 }
+
+
+void gaussian_kernel(float** gauss, int padd, float sigma){
+    //x, y = np.mgrid[-size:size+1, -size:size+1]
+	float coeff = 2 * pow(sigma, 2);
+	int k_size = 1 + 2*padd;
+	float sum = 0;
+	// gauss = np.exp(-(x**2 + y**2) / coeff
+    // technically not a true gaussian kernel, but sum(ker) == 1 is more important than closer approx. of gaus. dist. 
+    for(int i = 0; i < k_size; ++i){
+	    for(int j = 0; j < k_size; ++j){
+	        gauss[i][j] = exp(-((i-padd)*(i-padd)+(j-padd)*(j-padd)) / coeff);
+	        //printf("%f\n", gauss[i][j]);
+	        sum += gauss[i][j];
+	    }
+	}
+    //g /= np.abs(g).sum()
+	for(size_t i = 0; i < k_size; ++i){
+	    for(size_t j = 0; j < k_size; ++j){
+			gauss[i][j] = gauss[i][j] / sum;
+	    }
+	}
+    return;
+}
+
 
 int main(){
 
@@ -65,6 +91,24 @@ int main(){
     string ty2 =  type2str( blurred_img.type() );
 	cout << "type: " << ty2 << endl;	
 
+    float ** gauss = new float*[kernel_size];
+    for(size_t i = 0; i < kernel_size; ++i){
+    	gauss[i] = new float[kernel_size];
+    }
+
+    gaussian_kernel(gauss, padd, 1.4);
+    for(int i = 0; i < kernel_size; ++i){
+	    for(int j = 0; j < kernel_size; ++j){
+	    	printf("%f ", gauss[i][j]);
+	    	// printf("gauss[%i][%i]=%f ", i, j, gauss[i][j]);
+		}
+	    printf("\n");
+	}
+
+	for(size_t i = 0; i < kernel_size; ++i){
+		delete gauss[i];
+	}
+	delete gauss;
 
 
 	return 0;
