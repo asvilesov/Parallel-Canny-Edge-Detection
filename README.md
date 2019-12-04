@@ -11,4 +11,4 @@ sudo apt-get install libopencv-dev
 
 serial compilation command
 
-g++ serial.cpp -o output `pkg-config --cflags --libs opencv` 
+g++ serial.cpp -o output 'pkg-config --cflags --libs opencv' 
