@@ -45,7 +45,7 @@ __global__ void convolution_kernel(int *img, int *conv, int *phase, int *h, int 
 	int x_gradient[] = {-1, 0, 1, -2, 0, 2, -1, 0, 1};
 	int y_gradient[] = {1,2,1, 0, 0, 0, -1, -2, -1};
 
-	//int y_gradient[] = {0,0,0, 0, 1, 0, 0, 0, 0};
+	//int identity_mat[] = {0,0,0, 0, 1, 0, 0, 0, 0};
 
 	int x_mag, y_mag;
 
@@ -75,6 +75,100 @@ __global__ void convolution_kernel(int *img, int *conv, int *phase, int *h, int 
 	phase[(my_y) + my_x + *padding] = phase_angle;
 }
 
+__global__ void optimized_convolution_filter(int *img, int *conv,  int *phase, int *h, int *w, int *padding){
+	int my_x = threadIdx.x;
+	int my_y = (blockIdx.x)*((blockDim.x/16)*blockDim.x);
+	int x_gradient[] = {-1, 0, 1, -2, 0, 2, -1, 0, 1};
+	int y_gradient[] = {1,2,1, 0, 0, 0, -1, -2, -1};
+	int x_mag, y_mag;
+
+	__shared__ int s_img[3][1024]; //this is the largest dimension it can be
+
+	if(blockIdx.x == 0){
+		s_img[0][threadIdx.x] = img[my_y+my_x];
+		s_img[1][threadIdx.x] = img[my_y+blockDim.x+my_x];
+		s_img[2][threadIdx.x] = img[my_y+2*blockDim.x+my_x];
+	}
+	else{
+		s_img[0][threadIdx.x] = img[my_y-blockDim.x+my_x];
+		s_img[1][threadIdx.x] = img[my_y+my_x];
+		s_img[2][threadIdx.x] = img[my_y+blockDim.x+my_x];
+	}
+	
+	if(blockIdx.x == 0){ //if first block
+		for(int i = 1; i < (blockDim.x/16); i++){
+			__syncthreads();
+			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
+				int x_mag = 	s_img[0][my_x-1]*x_gradient[0] +  s_img[1][my_x]*x_gradient[1] + s_img[2][my_x+1]*x_gradient[2] +  
+								s_img[0][my_x-1]*x_gradient[3] +  s_img[1][my_x]*x_gradient[4] + s_img[2][my_x+1]*x_gradient[5] + 
+								s_img[0][my_x-1]*x_gradient[6] +  s_img[1][my_x]*x_gradient[7] + s_img[2][my_x+1]*x_gradient[8];
+				int y_mag = 	s_img[0][my_x-1]*y_gradient[0] +  s_img[1][my_x]*y_gradient[1] + s_img[2][my_x+1]*y_gradient[2] +  
+								s_img[0][my_x-1]*y_gradient[3] +  s_img[1][my_x]*y_gradient[4] + s_img[2][my_x+1]*y_gradient[5] + 
+								s_img[0][my_x-1]*y_gradient[6] +  s_img[1][my_x]*y_gradient[7] + s_img[2][my_x+1]*y_gradient[8];
+				conv[my_y + (i)*blockDim.x + my_x] = int(sqrt(float(y_mag*y_mag)+ float(x_mag*x_mag))/758*255);
+				float phase_angle = atan2(float(y_mag), float(x_mag)) * 180 / (atan(1.0)*4);
+				if ( phase_angle < 0){
+					phase_angle += 180;
+				}
+				phase[my_y + (i)*blockDim.x + my_x] = phase_angle;
+			}
+			__syncthreads();
+			s_img[0][threadIdx.x] = s_img[1][threadIdx.x];
+			s_img[1][threadIdx.x] = s_img[2][threadIdx.x];
+			s_img[2][threadIdx.x] = img[my_y+(1+i)*blockDim.x+my_x]; //dependent
+		}
+	}
+	else if(blockIdx.x == 15){ //if last block
+		for(int i = 0; i < (blockDim.x/16); i++){
+			__syncthreads();
+			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
+				int x_mag = 	s_img[0][my_x-1]*x_gradient[0] +  s_img[1][my_x]*x_gradient[1] + s_img[2][my_x+1]*x_gradient[2] +  
+								s_img[0][my_x-1]*x_gradient[3] +  s_img[1][my_x]*x_gradient[4] + s_img[2][my_x+1]*x_gradient[5] + 
+								s_img[0][my_x-1]*x_gradient[6] +  s_img[1][my_x]*x_gradient[7] + s_img[2][my_x+1]*x_gradient[8];
+				int y_mag = 	s_img[0][my_x-1]*y_gradient[0] +  s_img[1][my_x]*y_gradient[1] + s_img[2][my_x+1]*y_gradient[2] +  
+								s_img[0][my_x-1]*y_gradient[3] +  s_img[1][my_x]*y_gradient[4] + s_img[2][my_x+1]*y_gradient[5] + 
+								s_img[0][my_x-1]*y_gradient[6] +  s_img[1][my_x]*y_gradient[7] + s_img[2][my_x+1]*y_gradient[8];
+				conv[my_y + (i)*blockDim.x + my_x] = int(sqrt(float(y_mag*y_mag)+ float(x_mag*x_mag))/758*255);
+				float phase_angle = atan2(float(y_mag), float(x_mag)) * 180 / (atan(1.0)*4);
+				if ( phase_angle < 0){
+					phase_angle += 180;
+				}
+				phase[my_y + (i)*blockDim.x + my_x] = phase_angle;
+			}
+			__syncthreads();
+			s_img[0][threadIdx.x] = s_img[1][threadIdx.x];
+			s_img[1][threadIdx.x] = s_img[2][threadIdx.x];
+			s_img[2][threadIdx.x] = img[my_y+(2+i)*blockDim.x+my_x]; //dependent
+		}
+	}
+	else{ //if any other block
+		for(int i = 0; i < (blockDim.x/16); i++){
+			__syncthreads();
+			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
+				int x_mag = 	s_img[0][my_x-1]*x_gradient[0] +  s_img[1][my_x]*x_gradient[1] + s_img[2][my_x+1]*x_gradient[2] +  
+								s_img[0][my_x-1]*x_gradient[3] +  s_img[1][my_x]*x_gradient[4] + s_img[2][my_x+1]*x_gradient[5] + 
+								s_img[0][my_x-1]*x_gradient[6] +  s_img[1][my_x]*x_gradient[7] + s_img[2][my_x+1]*x_gradient[8];
+				int y_mag = 	s_img[0][my_x-1]*y_gradient[0] +  s_img[1][my_x]*y_gradient[1] + s_img[2][my_x+1]*y_gradient[2] +  
+								s_img[0][my_x-1]*y_gradient[3] +  s_img[1][my_x]*y_gradient[4] + s_img[2][my_x+1]*y_gradient[5] + 
+								s_img[0][my_x-1]*y_gradient[6] +  s_img[1][my_x]*y_gradient[7] + s_img[2][my_x+1]*y_gradient[8];
+				conv[my_y + (i)*blockDim.x + my_x] = int(sqrt(float(y_mag*y_mag)+ float(x_mag*x_mag))/758*255);
+				float phase_angle = atan2(float(y_mag), float(x_mag)) * 180 / (atan(1.0)*4);
+				if ( phase_angle < 0){
+					phase_angle += 180;
+				}
+				phase[my_y + (i)*blockDim.x + my_x] = phase_angle;
+			}
+			__syncthreads();
+			s_img[0][threadIdx.x] = s_img[1][threadIdx.x];
+			s_img[1][threadIdx.x] = s_img[2][threadIdx.x];
+			s_img[2][threadIdx.x] = img[my_y+(2+i)*blockDim.x+my_x]; //dependent
+		}
+	} 
+
+}
+
+
+
 //3x3 Kernel hard-coded with 1-sigma SD
 __global__ void gaussian_filter(int *img, int *conv, int *padding){
 	int my_x = threadIdx.x;
@@ -85,16 +179,95 @@ __global__ void gaussian_filter(int *img, int *conv, int *padding){
 					0.123317,	0.195346,	0.123317,
 					0.077847,	0.123317,	0.077847};
 
-	//std 2
+	// //std 2
 	// float gauss[] = {0.102059,	0.115349,	0.102059,
 	// 				0.115349,	0.130371,	0.115349,
 	// 				0.102059,	0.115349,	0.102059};
+
+	//// uniform
+	//float gauss[] = {0.11111, 0.11111, 0.11111,0.11111, 0.11111, 0.11111,0.11111, 0.11111, 0.11111};
 
 	float gauss_val = 	img[(my_y-blockDim.x-2*(*padding))+my_x+*padding-1]*gauss[0] +  img[(my_y-blockDim.x-2*(*padding))+my_x+*padding]*gauss[1] + img[(my_y-blockDim.x-2*(*padding))+my_x+*padding+1]*gauss[2] +  
 						img[my_y+my_x+*padding-1]*gauss[3] +  img[my_y+my_x+*padding]*gauss[4] + img[my_y+my_x+*padding+1]*gauss[5] + 
 						img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1]*gauss[6] +  img[(my_y+blockDim.x+2*(*padding))+my_x+*padding]*gauss[7] + img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]*gauss[8];
 
 	conv[(my_y) + my_x + *padding] = int(gauss_val); 
+
+}
+
+__global__ void optimized_gaussian_filter(int *img, int *conv, int *padding){
+	int my_x = threadIdx.x;
+	int my_y = (blockIdx.x)*((blockDim.x/16)*blockDim.x);
+
+	__shared__ int s_img[3][1024]; //this is the largest dimension it can be
+
+	if(blockIdx.x == 0){
+		s_img[0][threadIdx.x] = img[my_y+my_x];
+		s_img[1][threadIdx.x] = img[my_y+blockDim.x+my_x];
+		s_img[2][threadIdx.x] = img[my_y+2*blockDim.x+my_x];
+	}
+	else{
+		s_img[0][threadIdx.x] = img[my_y-blockDim.x+my_x];
+		s_img[1][threadIdx.x] = img[my_y+my_x];
+		s_img[2][threadIdx.x] = img[my_y+blockDim.x+my_x];
+	}
+
+	//std 1
+	float gauss[] = {0.077847,	0.123317,	0.077847,
+					0.123317,	0.195346,	0.123317,
+					0.077847,	0.123317,	0.077847};
+
+	//std 2
+	// float gauss[] = {0.102059,	0.115349,	0.102059,
+	// 				0.115349,	0.130371,	0.115349,
+	// 				0.102059,	0.115349,	0.102059};
+	
+	if(blockIdx.x == 0){ //if first block
+		for(int i = 1; i < (blockDim.x/16); i++){
+			__syncthreads();
+			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
+				float gauss_val = 	s_img[0][my_x-1]*gauss[0] +  s_img[1][my_x]*gauss[1] + s_img[2][my_x+1]*gauss[2] +  
+								s_img[0][my_x-1]*gauss[3] +  s_img[1][my_x]*gauss[4] + s_img[2][my_x+1]*gauss[5] + 
+								s_img[0][my_x-1]*gauss[6] +  s_img[1][my_x]*gauss[7] + s_img[2][my_x+1]*gauss[8];
+
+				conv[my_y + (i)*blockDim.x + my_x] = int(gauss_val);
+			}
+			__syncthreads();
+			s_img[0][threadIdx.x] = s_img[1][threadIdx.x];
+			s_img[1][threadIdx.x] = s_img[2][threadIdx.x];
+			s_img[2][threadIdx.x] = img[my_y+(1+i)*blockDim.x+my_x]; //dependent
+		}
+	}
+	else if(blockIdx.x == 15){ //if last block
+		for(int i = 0; i < (blockDim.x/16); i++){
+			__syncthreads();
+			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
+				float gauss_val = 	s_img[0][my_x-1]*gauss[0] +  s_img[1][my_x]*gauss[1] + s_img[2][my_x+1]*gauss[2] +  
+								s_img[0][my_x-1]*gauss[3] +  s_img[1][my_x]*gauss[4] + s_img[2][my_x+1]*gauss[5] + 
+								s_img[0][my_x-1]*gauss[6] +  s_img[1][my_x]*gauss[7] + s_img[2][my_x+1]*gauss[8];
+				conv[my_y + (i)*blockDim.x + my_x] = int(gauss_val);
+			}
+			__syncthreads();
+			s_img[0][threadIdx.x] = s_img[1][threadIdx.x];
+			s_img[1][threadIdx.x] = s_img[2][threadIdx.x];
+			s_img[2][threadIdx.x] = img[my_y+(2+i)*blockDim.x+my_x]; //dependent
+		}
+	}
+	else{ //if any other block
+		for(int i = 0; i < (blockDim.x/16); i++){
+			__syncthreads();
+			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
+				float gauss_val = 	s_img[0][my_x-1]*gauss[0] +  s_img[1][my_x]*gauss[1] + s_img[2][my_x+1]*gauss[2] +  
+								s_img[0][my_x-1]*gauss[3] +  s_img[1][my_x]*gauss[4] + s_img[2][my_x+1]*gauss[5] + 
+								s_img[0][my_x-1]*gauss[6] +  s_img[1][my_x]*gauss[7] + s_img[2][my_x+1]*gauss[8];
+				conv[my_y + (i)*blockDim.x + my_x] = int(gauss_val);
+			}
+			__syncthreads();
+			s_img[0][threadIdx.x] = s_img[1][threadIdx.x];
+			s_img[1][threadIdx.x] = s_img[2][threadIdx.x];
+			s_img[2][threadIdx.x] = img[my_y+(2+i)*blockDim.x+my_x]; //dependent
+		}
+	} 
 
 }
 
@@ -184,8 +357,8 @@ int main(){
 	cudaEventCreate(&stop);
 
 	//image setup
-	//Mat img_cv = imread("test.png");
-	Mat img_cv = imread("4.jpg");
+	Mat img_cv = imread("gg.jpg");
+	//Mat img_cv = imread("4.jpg");
 	Mat gray_img;
 	cvtColor(img_cv, gray_img, CV_BGR2GRAY);
 	printf("%s", type2str(gray_img.type()).c_str());
@@ -193,8 +366,8 @@ int main(){
 	int height = img_cv.rows;
 	int width = img_cv.cols;
 	//Canny Edge Filter Parameters
-	int high = 30;
-	int low = 10;
+	int high = 70;
+	int low = 30;
 	int *h_p = &high;
 	int *l_p = &low;
 
@@ -215,8 +388,9 @@ int main(){
 	printf("%i\n", *padd_p);
 
 	//GPU setup
-	dim3 dimGrid(height-2*padd);
-	dim3 dimBlock(width-2*padd);
+	dim3 dimGrid(16);
+	dim3 dimBlock(width);
+
 
 	int *gpu_img, *gpu_conv_img, *gpu_phase_img, *gpu_padd, *gpu_h, *gpu_w;
 	cudaMalloc((void**)&gpu_img, sizeof(int)*height*width);
@@ -243,40 +417,42 @@ int main(){
 	cudaEventRecord(start, 0);
 
 	//invoke Gauss Kernel
-	gaussian_filter<<<dimGrid, dimBlock>>> (gpu_img, gpu_conv_img, gpu_padd);
-	//cudaMemcpy(conv_img, gpu_conv_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+	optimized_gaussian_filter<<<dimGrid, dimBlock>>> (gpu_img, gpu_conv_img, gpu_padd);
+	cudaMemcpy(conv_img, gpu_conv_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
-	//invoke Sobel Kernel
-	convolution_kernel<<<dimGrid, dimBlock>>> (gpu_conv_img, gpu_img, gpu_phase_img, gpu_h, gpu_w, gpu_padd);
+	// //invoke Sobel Kernel
+	optimized_convolution_filter<<<dimGrid, dimBlock>>> (gpu_conv_img, gpu_img, gpu_phase_img, gpu_h, gpu_w, gpu_padd);
 	cudaMemcpy(conv_img, gpu_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
-	//cudaMemcpy(phase_img, gpu_phase_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+	cudaMemcpy(phase_img, gpu_phase_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
-	// // // // invoke non-max suppression
+	// // // // // // invoke non-max suppression
+	dim3 dimGrid2(height-2*padd);
+	dim3 dimBlock2(width-2*padd);
 	int *gpu_new_img;
 	cudaMalloc((void**)&gpu_new_img, sizeof(int)*height*width);
 	cudaMemcpy(gpu_new_img, conv_img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
-	non_max_suppression<<<dimGrid, dimBlock>>> (gpu_img, gpu_new_img, gpu_phase_img, gpu_padd);
-	//cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
-
-	// // // // // invoke thresholding
-	thresholding<<<dimGrid, dimBlock>>> (gpu_new_img, gpu_padd, gpu_h, gpu_w);
+	non_max_suppression<<<dimGrid2, dimBlock2>>> (gpu_img, gpu_new_img, gpu_phase_img, gpu_padd);
 	cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
-	// // invoke hysteresis
+	// // // // // // // invoke thresholding
+	thresholding<<<dimGrid2, dimBlock2>>> (gpu_new_img, gpu_padd, gpu_h, gpu_w);
+	cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+
+	// // // invoke hysteresis
 	int count = 0;
 	while(flag == 1){
 		count++;
 		flag = 0;
-		hystersis<<<dimGrid, dimBlock>>> (gpu_new_img, gpu_padd);
+		hystersis<<<dimGrid2, dimBlock2>>> (gpu_new_img, gpu_padd);
 		cudaDeviceSynchronize();
-		//cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+		cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 	}
 
 	// cleanup Image
-	clean_up<<<dimGrid, dimBlock>>> (gpu_new_img, gpu_padd);
+	clean_up<<<dimGrid2, dimBlock2>>> (gpu_new_img, gpu_padd);
 	cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
-	printf("Flag is: %i and count is %i\n", flag, count);
+	//printf("Flag is: %i and count is %i\n", flag, count);
 
 	cudaEventRecord(stop, 0);
 
@@ -309,6 +485,7 @@ int main(){
 	namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
     imshow( "Display window", gray_img);                   // Show our image inside it.
 
+
     //Mat conv_img_cv = Mat(1, width, CV_8U, conv_img, sizeof(int)*width);
     //memcpy(conv_img_cv.data, conv_img, height*width*sizeof(int));
     for(i = 0; i < height*width; i++){
@@ -317,9 +494,14 @@ int main(){
     namedWindow( "Convolution Image", WINDOW_AUTOSIZE);
     imshow("Convolution Image", gray_img);
 
+    imwrite("hi.jpg", gray_img);
+
     //printf("%s", type2str(conv_img.type()).c_str());
 
-    waitKey(0);                                          // Wait for a keystroke in the window
+    waitKey(0);          
+
+    
+                                    // Wait for a keystroke in the window
 	
     printf("Image size: %i %i \n", height, width);
 	printf("Pixel at [0,1]: %i\n", img_cv.at<Vec3b>(0,1)[1]);

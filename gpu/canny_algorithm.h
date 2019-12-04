@@ -8,6 +8,19 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+//for benchmarking
+// #include <opencv2/core/cuda.hpp>
+// #include <opencv2/imgproc.hpp>
+// #include <opencv2/cudaimgproc.hpp>
+
+// #include "opencv2\core\core.hpp"
+// #include "opencv2\core\cuda.hpp"
+// #include "opencv2\core\cuda\filters.hpp"
+// #include "opencv2\cudaarithm.hpp"
+// #include "opencv2\cudafilters.hpp"
+// #include "opencv2\cudaimgproc.hpp"
+// #include "opencv2\cudalegacy.hpp"
+
 
 using namespace cv;
 using namespace std;
@@ -96,6 +109,36 @@ __global__ void gaussian_filter(int *img, int *conv, int *padding){
 
 }
 
+
+// __global__ void optimized_gaussian_filter(int *img, int *conv, int *padding){
+// 	int my_x = threadIdx.x;
+// 	int my_y = blockIdx.x;
+// 	//int my_y = (blockIdx.x+*padding)*(blockDim.x+2*(*padding));
+
+// 	__shared__ int pixel_image[blockDim.x + 2*(*padding)][3];
+
+// 	//Initial Initialization
+
+
+	
+// 	//std 1
+// 	float gauss[] = {0.077847,	0.123317,	0.077847,
+// 					0.123317,	0.195346,	0.123317,
+// 					0.077847,	0.123317,	0.077847};
+
+// 	//std 2
+// 	// float gauss[] = {0.102059,	0.115349,	0.102059,
+// 	// 				0.115349,	0.130371,	0.115349,
+// 	// 				0.102059,	0.115349,	0.102059};
+
+// 	float gauss_val = 	img[(my_y-blockDim.x-2*(*padding))+my_x+*padding-1]*gauss[0] +  img[(my_y-blockDim.x-2*(*padding))+my_x+*padding]*gauss[1] + img[(my_y-blockDim.x-2*(*padding))+my_x+*padding+1]*gauss[2] +  
+// 						img[my_y+my_x+*padding-1]*gauss[3] +  img[my_y+my_x+*padding]*gauss[4] + img[my_y+my_x+*padding+1]*gauss[5] + 
+// 						img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1]*gauss[6] +  img[(my_y+blockDim.x+2*(*padding))+my_x+*padding]*gauss[7] + img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]*gauss[8];
+
+// 	conv[(my_y) + my_x + *padding] = int(gauss_val); 
+
+// }
+
 __global__ void non_max_suppression(int *img, int *output, int *phase, int *padding){ //this might have an error, if it is changing in place... should be reading from steady state image
 	int my_x = threadIdx.x;
 	int my_y = (blockIdx.x+*padding)*(blockDim.x+2*(*padding));
@@ -138,14 +181,14 @@ __global__ void hystersis(int*img, int*padding){
 		}
 
 		//Should this be an or or and and operator?
-		// if( (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding-1] == 0) && (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding]== 0) && 
-		// 	(img[(my_y-blockDim.x-2*(*padding))+my_x+*padding+1] == 0) && (img[my_y+my_x+*padding-1] == 0) &&
-		// 	(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1] == 0) && (img[my_y+my_x+*padding+1] == 0) &&
-		// 	(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding] == 0) && (img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]== 0)){
-		if( (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding-1] == 0) || (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding]== 0) || 
-			(img[(my_y-blockDim.x-2*(*padding))+my_x+*padding+1] == 0) || (img[my_y+my_x+*padding-1] == 0) ||
-			(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1] == 0) || (img[my_y+my_x+*padding+1] == 0) ||
-			(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding] == 0) || (img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]== 0)){
+		if( (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding-1] == 0) && (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding]== 0) && 
+			(img[(my_y-blockDim.x-2*(*padding))+my_x+*padding+1] == 0) && (img[my_y+my_x+*padding-1] == 0) &&
+			(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1] == 0) && (img[my_y+my_x+*padding+1] == 0) &&
+			(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding] == 0) && (img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]== 0)){
+		// if( (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding-1] == 0) || (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding]== 0) || 
+		// 	(img[(my_y-blockDim.x-2*(*padding))+my_x+*padding+1] == 0) || (img[my_y+my_x+*padding-1] == 0) ||
+		// 	(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1] == 0) || (img[my_y+my_x+*padding+1] == 0) ||
+		// 	(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding] == 0) || (img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]== 0)){
 
 			img[my_y+my_x+*padding] = 0;
 			flag = 1;
@@ -167,8 +210,8 @@ float canny_edge_detector(Mat gray_img){
 	int height = gray_img.rows;
 	int width = gray_img.cols;
 	//Canny Edge Filter Parameters
-	int high = 30;
-	int low = 10;
+	int high = 100;
+	int low = 50;
 	int *h_p = &high;
 	int *l_p = &low;
 
@@ -191,6 +234,10 @@ float canny_edge_detector(Mat gray_img){
 	//GPU setup
 	dim3 dimGrid(height-2*padd);
 	dim3 dimBlock(width-2*padd);
+	//GPU optimized setup
+	// int cuda_cores = 2560;
+	// dim3 dimGrid(cuda_cores/height);
+	// dim3 dimBlock(width-2*padd);
 	//Malloc
 	int *gpu_img, *gpu_conv_img, *gpu_phase_img, *gpu_padd, *gpu_h, *gpu_w;
 	cudaMalloc((void**)&gpu_img, sizeof(int)*height*width);
@@ -266,6 +313,9 @@ float canny_edge_detector(Mat gray_img){
     imshow("Convolution Image", gray_img);
 
     waitKey(0); // Wait for a keystroke in the window
+
+    cudaError_t error = cudaGetLastError();
+	printf("error: %s\n", cudaGetErrorString(error));
 
     //Deallocate all memory
 	delete[] img;
