@@ -77,7 +77,7 @@ __global__ void convolution_kernel(int *img, int *conv, int *phase, int *h, int 
 
 __global__ void optimized_convolution_filter(int *img, int *conv,  int *phase, int *h, int *w, int *padding){
 	int my_x = threadIdx.x;
-	int my_y = (blockIdx.x)*((blockDim.x/16)*blockDim.x);
+	int my_y = (blockIdx.x)*((*h/16)*blockDim.x);
 	int x_gradient[] = {-1, 0, 1, -2, 0, 2, -1, 0, 1};
 	int y_gradient[] = {1,2,1, 0, 0, 0, -1, -2, -1};
 	int x_mag, y_mag;
@@ -96,7 +96,7 @@ __global__ void optimized_convolution_filter(int *img, int *conv,  int *phase, i
 	}
 	
 	if(blockIdx.x == 0){ //if first block
-		for(int i = 1; i < (blockDim.x/16); i++){
+		for(int i = 1; i < (*h/16); i++){
 			__syncthreads();
 			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
 				int x_mag = 	s_img[0][my_x-1]*x_gradient[0] +  s_img[1][my_x]*x_gradient[1] + s_img[2][my_x+1]*x_gradient[2] +  
@@ -119,7 +119,7 @@ __global__ void optimized_convolution_filter(int *img, int *conv,  int *phase, i
 		}
 	}
 	else if(blockIdx.x == 15){ //if last block
-		for(int i = 0; i < (blockDim.x/16); i++){
+		for(int i = 0; i < (*h/16); i++){
 			__syncthreads();
 			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
 				int x_mag = 	s_img[0][my_x-1]*x_gradient[0] +  s_img[1][my_x]*x_gradient[1] + s_img[2][my_x+1]*x_gradient[2] +  
@@ -142,7 +142,7 @@ __global__ void optimized_convolution_filter(int *img, int *conv,  int *phase, i
 		}
 	}
 	else{ //if any other block
-		for(int i = 0; i < (blockDim.x/16); i++){
+		for(int i = 0; i < (*h/16); i++){
 			__syncthreads();
 			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
 				int x_mag = 	s_img[0][my_x-1]*x_gradient[0] +  s_img[1][my_x]*x_gradient[1] + s_img[2][my_x+1]*x_gradient[2] +  
@@ -195,9 +195,9 @@ __global__ void gaussian_filter(int *img, int *conv, int *padding){
 
 }
 
-__global__ void optimized_gaussian_filter(int *img, int *conv, int *padding){
+__global__ void optimized_gaussian_filter(int *img, int *conv, int *h, int *w, int *padding){
 	int my_x = threadIdx.x;
-	int my_y = (blockIdx.x)*((blockDim.x/16)*blockDim.x);
+	int my_y = (blockIdx.x)*((*h/16)*blockDim.x);
 
 	__shared__ int s_img[3][1024]; //this is the largest dimension it can be
 
@@ -223,7 +223,7 @@ __global__ void optimized_gaussian_filter(int *img, int *conv, int *padding){
 	// 				0.102059,	0.115349,	0.102059};
 	
 	if(blockIdx.x == 0){ //if first block
-		for(int i = 1; i < (blockDim.x/16); i++){
+		for(int i = 1; i < (*h/16); i++){
 			__syncthreads();
 			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
 				float gauss_val = 	s_img[0][my_x-1]*gauss[0] +  s_img[1][my_x]*gauss[1] + s_img[2][my_x+1]*gauss[2] +  
@@ -239,7 +239,7 @@ __global__ void optimized_gaussian_filter(int *img, int *conv, int *padding){
 		}
 	}
 	else if(blockIdx.x == 15){ //if last block
-		for(int i = 0; i < (blockDim.x/16); i++){
+		for(int i = 0; i < (*h/16); i++){
 			__syncthreads();
 			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
 				float gauss_val = 	s_img[0][my_x-1]*gauss[0] +  s_img[1][my_x]*gauss[1] + s_img[2][my_x+1]*gauss[2] +  
@@ -254,7 +254,7 @@ __global__ void optimized_gaussian_filter(int *img, int *conv, int *padding){
 		}
 	}
 	else{ //if any other block
-		for(int i = 0; i < (blockDim.x/16); i++){
+		for(int i = 0; i < (*h/16); i++){
 			__syncthreads();
 			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
 				float gauss_val = 	s_img[0][my_x-1]*gauss[0] +  s_img[1][my_x]*gauss[1] + s_img[2][my_x+1]*gauss[2] +  
@@ -357,7 +357,7 @@ int main(){
 	cudaEventCreate(&stop);
 
 	//image setup
-	Mat img_cv = imread("gg.jpg");
+	Mat img_cv = imread("84_256.jpg");
 	//Mat img_cv = imread("4.jpg");
 	Mat gray_img;
 	cvtColor(img_cv, gray_img, CV_BGR2GRAY);
@@ -365,6 +365,8 @@ int main(){
 
 	int height = img_cv.rows;
 	int width = img_cv.cols;
+	int *height_p = &height;
+	int *width_p = &width;
 	//Canny Edge Filter Parameters
 	int high = 70;
 	int low = 30;
@@ -392,13 +394,15 @@ int main(){
 	dim3 dimBlock(width);
 
 
-	int *gpu_img, *gpu_conv_img, *gpu_phase_img, *gpu_padd, *gpu_h, *gpu_w;
+	int *gpu_img, *gpu_conv_img, *gpu_phase_img, *gpu_padd, *gpu_h, *gpu_w, *gpu_height, *gpu_width;
 	cudaMalloc((void**)&gpu_img, sizeof(int)*height*width);
 	cudaMalloc((void**)&gpu_conv_img, sizeof(int)*height*width);
 	cudaMalloc((void**)&gpu_phase_img, sizeof(int)*height*width);
 	cudaMalloc((void**)&gpu_padd, sizeof(int));
 	cudaMalloc((void**)&gpu_h, sizeof(int));
 	cudaMalloc((void**)&gpu_w, sizeof(int));
+	cudaMalloc((void**)&gpu_height, sizeof(int));
+	cudaMalloc((void**)&gpu_width, sizeof(int));
 	// map<int,int*> gpu_angle_pix;
 	// map<int,int*> angle_to_pixel_loc;
 	// int NS[] {0,1,0,-1};
@@ -412,16 +416,18 @@ int main(){
 	cudaMemcpy(gpu_padd, padd_p, sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(gpu_h, h_p, sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(gpu_w, l_p, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_height, height_p, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_width, width_p, sizeof(int), cudaMemcpyHostToDevice);
 
 	//start timer
 	cudaEventRecord(start, 0);
 
 	//invoke Gauss Kernel
-	optimized_gaussian_filter<<<dimGrid, dimBlock>>> (gpu_img, gpu_conv_img, gpu_padd);
+	optimized_gaussian_filter<<<dimGrid, dimBlock>>> (gpu_img, gpu_conv_img, gpu_height, gpu_width, gpu_padd);
 	cudaMemcpy(conv_img, gpu_conv_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
 	// //invoke Sobel Kernel
-	optimized_convolution_filter<<<dimGrid, dimBlock>>> (gpu_conv_img, gpu_img, gpu_phase_img, gpu_h, gpu_w, gpu_padd);
+	optimized_convolution_filter<<<dimGrid, dimBlock>>> (gpu_conv_img, gpu_img, gpu_phase_img, gpu_height, gpu_width, gpu_padd);
 	cudaMemcpy(conv_img, gpu_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 	cudaMemcpy(phase_img, gpu_phase_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
 
