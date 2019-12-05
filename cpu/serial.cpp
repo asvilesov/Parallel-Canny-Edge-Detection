@@ -1,3 +1,4 @@
+//g++ parallel.cpp -o p_output -fopenmp `pkg-config --cflags --libs opencv`
 #include<string>
 #include<iostream> 
 #include<stdlib.h>
@@ -215,46 +216,34 @@ void visualize(float ** raw_img, int height, int width){
     return;
 }
 
-int main(){
-
-
-    //image setup
-    Mat cv_img = imread("test.png");
-    Mat gray_img;
-    cvtColor(cv_img, gray_img, CV_BGR2GRAY);
-
-    int height = cv_img.rows;
-    int width = cv_img.cols;
-
-    //Kernel Setup
+//ASSUME all images in dataset same size
+void test_dataset(vector<String> filenames, string saveFolder = ""){
+    struct timespec start, stop; 
+    float tot_time;
+    float avg_time;
+    float total_time = 0;
+    float gauss_time = 0;
+    float gradient_time = 0;
+    float non_max_time = 0; 
+    float thresholding_time = 0;
+    float hysteresis_time =0;
+    int height;
+    int width; 
     int kernel_size = 5;
     int padd = kernel_size/2;
-
-    // namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
- //    imshow( "Display window", gray_img);                   // Show our image inside it.
-
- //    waitKey(0);                                          // Wait for a keystroke in the window
-    
-    printf("Image size: %i %i \n", height, width);
-    string ty1 =  type2str( gray_img.type() );
-    cout << "type: " << ty1 << endl;    
-    // printf("%i \n", img.at<Vec3b>(1,1)[1]);
-
-// create kernel
+    //Kernel Setup
     float ** gauss = new float*[kernel_size];
     for(int i = 0; i < kernel_size; ++i){
         gauss[i] = new float[kernel_size];
     }
     gaussian_kernel(gauss, padd, 1.4);
-    for(int i = 0; i < kernel_size; ++i){
-        for(int j = 0; j < kernel_size; ++j){
-            printf("%f ", gauss[i][j]);
-            // printf("gauss[%i][%i]=%f ", i, j, gauss[i][j]);
-        }
-        printf("\n");
-    }
 
-//create 2D array
+    Mat cv_img = imread(filenames[0]);
+    Mat gray_img;
+    cvtColor(cv_img, gray_img, CV_BGR2GRAY);
+    height = cv_img.rows;
+    width = cv_img.cols;
+    //create 2D array
     float ** img = new float*[height];
     float **img2 = new float*[height];
     float **theta = new float*[height];
@@ -264,53 +253,74 @@ int main(){
         img2[i] = new float[width];
         theta[i] = new float[width];
     }
-
-    for(int i = 0; i < height; i++){
-        for(int j = 0; j < width; j++){
-            img[i][j] = gray_img.at<uchar>(i, j);
-            img2[i][j] = 0;
+   
+    for (size_t i = 0; i < filenames.size(); i++) { //
+        Mat cv_img = imread(filenames[i]);
+        Mat gray_img;
+        cvtColor(cv_img, gray_img, CV_BGR2GRAY); 
+        for(int i = 0; i < height; i++){
+            for(int j = 0; j < width; j++){
+                img[i][j] = gray_img.at<uchar>(i, j);
+                img2[i][j] = 0;
+            }
         }
+        if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
+        gaussian_blur(img, img2, gauss, height, width, kernel_size);
+        if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}   
+        gauss_time += (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;    
+        
+        if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
+        sobel_filter(img2, img, theta, height, width);
+        if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}   
+        gradient_time += (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;    
+
+        if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
+        non_max_suppression(img, img2, theta, height, width);
+        if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}   
+        non_max_time += (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;    
+        
+        if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
+        double_threshold(img2, img, theta, height, width);
+        if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}   
+        thresholding_time += (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;    
+
+        if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
+        hysteresis(img, height, width);
+        if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}   
+        hysteresis_time += (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;    
     }
-
-
-    struct timespec start, stop; 
-    double time;
-
-    visualize(img, height, width);
-//start timer
-    if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
-
-    gaussian_blur(img, img2, gauss, height, width, kernel_size);
-//  visualize(img2, height, width);
-    sobel_filter(img2, img, theta, height, width);
-//  visualize(img, height, width);
-    non_max_suppression(img, img2, theta, height, width);
-//  visualize(img2, height, width);
-    double_threshold(img2, img, theta, height, width);
-    hysteresis(img, height, width);
-//end timer
-    if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}   
-    time = (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;    
-    printf("Execution time = %f sec\n", time);      
-
-    visualize(img, height, width);
+    printf("Average Blur Execution time = %f sec\n", gauss_time/filenames.size());    
+    printf("Average Sobel Execution time = %f sec\n", gradient_time/filenames.size());    
+    printf("Average Non max Execution time = %f sec\n", non_max_time/filenames.size());    
+    printf("Average Thresholding Execution time = %f sec\n", thresholding_time/filenames.size());    
+    printf("Average Hysteresis Execution time = %f sec\n", hysteresis_time/filenames.size());    
+    tot_time = gauss_time + gradient_time + non_max_time + thresholding_time + hysteresis_time;
+    avg_time = tot_time / filenames.size();
+    printf("Average Canny Execution time = %f sec\n", avg_time);    
+    printf("Average FPS is: %f\n", (filenames.size())/tot_time);
 
     for(int i = 0; i < height; ++i){
         delete img[i];
         delete img2[i]; 
         delete theta[i];
     }
-
     delete img;
     delete img2;
     delete theta;
 
-//delete kernel
     for(int i = 0; i < kernel_size; ++i){
         delete gauss[i];
     }
     delete gauss;
 
+    return;
+}
 
+int main(){
+    String folderpath = "../images/1024x1024/*.jpg";
+    string saveFolder = "";
+    vector<String> filenames;
+    cv::glob(folderpath, filenames);
+    test_dataset(filenames, saveFolder);
     return 0;
 }
