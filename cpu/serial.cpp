@@ -40,24 +40,24 @@ string type2str(int type) {
 
 void gaussian_kernel(float** gauss, int padd, float sigma){
     //x, y = np.mgrid[-size:size+1, -size:size+1]
-	float coeff = 2 * pow(sigma, 2);
-	int k_size = 1 + 2*padd;
-	float sum = 0;
-	// gauss = np.exp(-(x**2 + y**2) / coeff
+    float coeff = 2 * pow(sigma, 2);
+    int k_size = 1 + 2*padd;
+    float sum = 0;
+    // gauss = np.exp(-(x**2 + y**2) / coeff
     // technically not a true gaussian kernel, but sum(ker) == 1 is more important than closer approx. of gaus. dist. 
     for(int i = 0; i < k_size; ++i){
-	    for(int j = 0; j < k_size; ++j){
-	        gauss[i][j] = exp(-((i-padd)*(i-padd)+(j-padd)*(j-padd)) / coeff);
-	        //printf("%f\n", gauss[i][j]);
-	        sum += gauss[i][j];
-	    }
-	}
+        for(int j = 0; j < k_size; ++j){
+            gauss[i][j] = exp(-((i-padd)*(i-padd)+(j-padd)*(j-padd)) / coeff);
+            //printf("%f\n", gauss[i][j]);
+            sum += gauss[i][j];
+        }
+    }
     //g /= np.abs(g).sum()
-	for(int i = 0; i < k_size; ++i){
-	    for(int j = 0; j < k_size; ++j){
-			gauss[i][j] = gauss[i][j] / sum;
-	    }
-	}
+    for(int i = 0; i < k_size; ++i){
+        for(int j = 0; j < k_size; ++j){
+            gauss[i][j] = gauss[i][j] / sum;
+        }
+    }
     return;
 }
 
@@ -78,8 +78,8 @@ void gaussian_blur(float **img, float **blur_img, float **gauss, int h, int w, i
 
 
 void sobel_filter(float **img, float **sobel_img, float **theta, int h, int w){
-	int padd = 1; 
-	float sobel_x[3][3] =
+    int padd = 1; 
+    float sobel_x[3][3] =
     {
         {-1, 0, 1},
         {-2, 0, 2},
@@ -101,7 +101,7 @@ void sobel_filter(float **img, float **sobel_img, float **theta, int h, int w){
                     grad_x += img[i+k_i][j+k_j]*sobel_x[k_i+padd][k_j+padd]; 
                     grad_y += img[i+k_i][j+k_j]*sobel_y[k_i+padd][k_j+padd];
                 }
-        	}
+            }
             sobel_img[i][j] = sqrt(pow(grad_x,2) + pow(grad_y,2));///758*255;
             theta[i][j] = atan2(grad_y, grad_x);
         }
@@ -115,10 +115,10 @@ void non_max_suppression(float **img, float **Z, float**theta, int h, int w){
     int padd = 1;
     for(int i=padd; i<h-padd; i++){
         for(int j=padd; j<w-padd; j++){
-		    theta[i][j] = theta[i][j] * 180 / M_PI;
-		    if(theta[i][j] < 0){
-		    	theta[i][j] += 180;
-		    } 
+            theta[i][j] = theta[i][j] * 180 / M_PI;
+            if(theta[i][j] < 0){
+                theta[i][j] += 180;
+            } 
 
             float q = 255;
             float r = 255;
@@ -151,7 +151,7 @@ void non_max_suppression(float **img, float **Z, float**theta, int h, int w){
 }
 
 void double_threshold(float **img, float **out_img, float**theta, int h, int w, float low_thres = 50, float high_thres = 100){
-	int padd = 1;
+    int padd = 1;
     for(int i=padd; i<h-padd; i++){
         for(int j=padd; j<w-padd; j++){
             if(img[i][j] >= high_thres){
@@ -161,7 +161,7 @@ void double_threshold(float **img, float **out_img, float**theta, int h, int w, 
                 out_img[i][j] = low_thres;
             }
             else{
-            	out_img[i][j] = 0;
+                out_img[i][j] = 0;
             }
         }
     }
@@ -169,148 +169,148 @@ void double_threshold(float **img, float **out_img, float**theta, int h, int w, 
 }
 
 void hysteresis(float **out_img, int h, int w, float low_thres = 50, float high_thres = 100){
-	bool changed = true;
-	while(changed){
-		changed = false;
-		int padd = 1;
-	    for(int i=padd; i<h-padd; i++){
-	        for(int j=padd; j<w-padd; j++){
-	            if (out_img[i][j] == low_thres){
-	            	changed = true;
-	                if ((out_img[i+1][j-1] == high_thres) || (out_img[i+1][j] == high_thres) || (out_img[i+1][j+1] == high_thres)
-	                    || (out_img[i][j-1] == high_thres) || (out_img[i][j+1] == high_thres)
-	                    || (out_img[i-1][j-1] == high_thres) || (out_img[i-1][j] == high_thres) || (out_img[i-1][j+1] == high_thres)){
-	                    out_img[i][j] = 255;
-	                }
-	                else{
-	                    out_img[i][j] = 0;
-		            }
-		        }
-	        }
-	    }
-	}
+    bool changed = true;
+    while(changed){
+        changed = false;
+        int padd = 1;
+        for(int i=padd; i<h-padd; i++){
+            for(int j=padd; j<w-padd; j++){
+                if (out_img[i][j] == low_thres){
+                    changed = true;
+                    if ((out_img[i+1][j-1] == high_thres) || (out_img[i+1][j] == high_thres) || (out_img[i+1][j+1] == high_thres)
+                        || (out_img[i][j-1] == high_thres) || (out_img[i][j+1] == high_thres)
+                        || (out_img[i-1][j-1] == high_thres) || (out_img[i-1][j] == high_thres) || (out_img[i-1][j+1] == high_thres)){
+                        out_img[i][j] = 255;
+                    }
+                    else{
+                        out_img[i][j] = 0;
+                    }
+                }
+            }
+        }
+    }
     return;
 }
 
 
 void visualize(float ** raw_img, int height, int width){
-	// //create new img
-	Mat img(height, width, CV_8U);
-	uint8_t *myData = img.data;
+    // //create new img
+    Mat img(height, width, CV_8U);
+    uint8_t *myData = img.data;
  //    printf("Image size: %i %i \n", blurred_img.rows, blurred_img.cols);
  //    string ty2 =  type2str( blurred_img.type() );
-	// cout << "type: " << ty2 << endl;	
-	for(int i = 0; i < height; i++){
-		for(int j = 0; j < width; j++){
-			if(i==0 || j==0 || i==height-1 || j==width-1){
-				myData[i*height + j] = 0;
-			}
-			myData[i*height + j] = (int) raw_img[i][j];	
-			//printf("%i\n", myData[i*height + j]);
-		}
-	}
-	namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
+    // cout << "type: " << ty2 << endl; 
+    for(int i = 0; i < height; i++){
+        for(int j = 0; j < width; j++){
+            if(i==0 || j==0 || i==height-1 || j==width-1){
+                myData[i*height + j] = 0;
+            }
+            myData[i*height + j] = (int) raw_img[i][j]; 
+            //printf("%i\n", myData[i*height + j]);
+        }
+    }
+    namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
     imshow( "Display window", img);                   // Show our image inside it.
     waitKey(0);                                          // Wait for a keystroke in the window
-	return;
+    return;
 }
 
 int main(){
 
 
-	//image setup
-	Mat cv_img = imread("test.png");
-	Mat gray_img;
-	cvtColor(cv_img, gray_img, CV_BGR2GRAY);
+    //image setup
+    Mat cv_img = imread("test.png");
+    Mat gray_img;
+    cvtColor(cv_img, gray_img, CV_BGR2GRAY);
 
-	int height = cv_img.rows;
-	int width = cv_img.cols;
+    int height = cv_img.rows;
+    int width = cv_img.cols;
 
-	//Kernel Setup
-	int kernel_size = 5;
-	int padd = kernel_size/2;
+    //Kernel Setup
+    int kernel_size = 5;
+    int padd = kernel_size/2;
 
-	// namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
+    // namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
  //    imshow( "Display window", gray_img);                   // Show our image inside it.
 
  //    waitKey(0);                                          // Wait for a keystroke in the window
-	
+    
     printf("Image size: %i %i \n", height, width);
     string ty1 =  type2str( gray_img.type() );
-	cout << "type: " << ty1 << endl;	
-	// printf("%i \n", img.at<Vec3b>(1,1)[1]);
+    cout << "type: " << ty1 << endl;    
+    // printf("%i \n", img.at<Vec3b>(1,1)[1]);
 
 // create kernel
     float ** gauss = new float*[kernel_size];
     for(int i = 0; i < kernel_size; ++i){
-    	gauss[i] = new float[kernel_size];
+        gauss[i] = new float[kernel_size];
     }
     gaussian_kernel(gauss, padd, 1.4);
     for(int i = 0; i < kernel_size; ++i){
-	    for(int j = 0; j < kernel_size; ++j){
-	    	printf("%f ", gauss[i][j]);
-	    	// printf("gauss[%i][%i]=%f ", i, j, gauss[i][j]);
-		}
-	    printf("\n");
-	}
+        for(int j = 0; j < kernel_size; ++j){
+            printf("%f ", gauss[i][j]);
+            // printf("gauss[%i][%i]=%f ", i, j, gauss[i][j]);
+        }
+        printf("\n");
+    }
 
 //create 2D array
-	float ** img = new float*[height];
-	float **img2 = new float*[height];
-	float **theta = new float*[height];
+    float ** img = new float*[height];
+    float **img2 = new float*[height];
+    float **theta = new float*[height];
 
     for(int i = 0; i < height; ++i){
-    	img[i] = new float[width];
-    	img2[i] = new float[width];
-		theta[i] = new float[width];
-	}
+        img[i] = new float[width];
+        img2[i] = new float[width];
+        theta[i] = new float[width];
+    }
 
-	for(int i = 0; i < height; i++){
-		for(int j = 0; j < width; j++){
-			img[i][j] = gray_img.at<uchar>(i, j);
-			img2[i][j] = 0;
-		}
-	}
+    for(int i = 0; i < height; i++){
+        for(int j = 0; j < width; j++){
+            img[i][j] = gray_img.at<uchar>(i, j);
+            img2[i][j] = 0;
+        }
+    }
 
 
-	struct timespec start, stop; 
-	double time;
+    struct timespec start, stop; 
+    double time;
 
-	visualize(img, height, width);
+    visualize(img, height, width);
 //start timer
-	if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
+    if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
 
-	gaussian_blur(img, img2, gauss, height, width, kernel_size);
-//	visualize(img2, height, width);
-	sobel_filter(img2, img, theta, height, width);
-//	visualize(img, height, width);
-	non_max_suppression(img, img2, theta, height, width);
-//	visualize(img2, height, width);
-	double_threshold(img2, img, theta, height, width);
-//	hysteresis(img, height, width);
+    gaussian_blur(img, img2, gauss, height, width, kernel_size);
+//  visualize(img2, height, width);
+    sobel_filter(img2, img, theta, height, width);
+//  visualize(img, height, width);
+    non_max_suppression(img, img2, theta, height, width);
+//  visualize(img2, height, width);
+    double_threshold(img2, img, theta, height, width);
+    hysteresis(img, height, width);
 //end timer
-	if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}	
-	time = (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;	
-	printf("Execution time = %f sec\n", time);		
+    if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}   
+    time = (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;    
+    printf("Execution time = %f sec\n", time);      
 
-	visualize(img, height, width);
+    visualize(img, height, width);
 
-	for(int i = 0; i < height; ++i){
-		delete img[i];
-		delete img2[i];	
-		delete theta[i];
-	}
+    for(int i = 0; i < height; ++i){
+        delete img[i];
+        delete img2[i]; 
+        delete theta[i];
+    }
 
-	delete img;
-	delete img2;
-	delete theta;
+    delete img;
+    delete img2;
+    delete theta;
 
 //delete kernel
-	for(int i = 0; i < kernel_size; ++i){
-		delete gauss[i];
-	}
-	delete gauss;
+    for(int i = 0; i < kernel_size; ++i){
+        delete gauss[i];
+    }
+    delete gauss;
 
 
-	return 0;
+    return 0;
 }
