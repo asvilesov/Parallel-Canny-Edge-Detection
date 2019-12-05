@@ -105,7 +105,7 @@ __global__ void optimized_convolution_filter(int *img, int *conv,  int *phase, i
 				int y_mag = 	s_img[0][my_x-1]*y_gradient[0] +  s_img[1][my_x]*y_gradient[1] + s_img[2][my_x+1]*y_gradient[2] +  
 								s_img[0][my_x-1]*y_gradient[3] +  s_img[1][my_x]*y_gradient[4] + s_img[2][my_x+1]*y_gradient[5] + 
 								s_img[0][my_x-1]*y_gradient[6] +  s_img[1][my_x]*y_gradient[7] + s_img[2][my_x+1]*y_gradient[8];
-				conv[my_y + (i)*blockDim.x + my_x] = int(sqrt(float(y_mag*y_mag)+ float(x_mag*x_mag))/758*255);
+				conv[my_y + (i)*blockDim.x + my_x] = int(sqrt(float(y_mag*y_mag)+ float(x_mag*x_mag))/700*255);
 				float phase_angle = atan2(float(y_mag), float(x_mag)) * 180 / (atan(1.0)*4);
 				if ( phase_angle < 0){
 					phase_angle += 180;
@@ -119,7 +119,7 @@ __global__ void optimized_convolution_filter(int *img, int *conv,  int *phase, i
 		}
 	}
 	else if(blockIdx.x == 15){ //if last block
-		for(int i = 0; i < (*h/16); i++){
+		for(int i = 0; i < (*h/16)-1; i++){
 			__syncthreads();
 			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
 				int x_mag = 	s_img[0][my_x-1]*x_gradient[0] +  s_img[1][my_x]*x_gradient[1] + s_img[2][my_x+1]*x_gradient[2] +  
@@ -128,7 +128,7 @@ __global__ void optimized_convolution_filter(int *img, int *conv,  int *phase, i
 				int y_mag = 	s_img[0][my_x-1]*y_gradient[0] +  s_img[1][my_x]*y_gradient[1] + s_img[2][my_x+1]*y_gradient[2] +  
 								s_img[0][my_x-1]*y_gradient[3] +  s_img[1][my_x]*y_gradient[4] + s_img[2][my_x+1]*y_gradient[5] + 
 								s_img[0][my_x-1]*y_gradient[6] +  s_img[1][my_x]*y_gradient[7] + s_img[2][my_x+1]*y_gradient[8];
-				conv[my_y + (i)*blockDim.x + my_x] = int(sqrt(float(y_mag*y_mag)+ float(x_mag*x_mag))/758*255);
+				conv[my_y + (i)*blockDim.x + my_x] = int(sqrt(float(y_mag*y_mag)+ float(x_mag*x_mag))/700*255);
 				float phase_angle = atan2(float(y_mag), float(x_mag)) * 180 / (atan(1.0)*4);
 				if ( phase_angle < 0){
 					phase_angle += 180;
@@ -151,7 +151,7 @@ __global__ void optimized_convolution_filter(int *img, int *conv,  int *phase, i
 				int y_mag = 	s_img[0][my_x-1]*y_gradient[0] +  s_img[1][my_x]*y_gradient[1] + s_img[2][my_x+1]*y_gradient[2] +  
 								s_img[0][my_x-1]*y_gradient[3] +  s_img[1][my_x]*y_gradient[4] + s_img[2][my_x+1]*y_gradient[5] + 
 								s_img[0][my_x-1]*y_gradient[6] +  s_img[1][my_x]*y_gradient[7] + s_img[2][my_x+1]*y_gradient[8];
-				conv[my_y + (i)*blockDim.x + my_x] = int(sqrt(float(y_mag*y_mag)+ float(x_mag*x_mag))/758*255);
+				conv[my_y + (i)*blockDim.x + my_x] = int(sqrt(float(y_mag*y_mag)+ float(x_mag*x_mag))/700*255);
 				float phase_angle = atan2(float(y_mag), float(x_mag)) * 180 / (atan(1.0)*4);
 				if ( phase_angle < 0){
 					phase_angle += 180;
@@ -239,7 +239,7 @@ __global__ void optimized_gaussian_filter(int *img, int *conv, int *h, int *w, i
 		}
 	}
 	else if(blockIdx.x == 15){ //if last block
-		for(int i = 0; i < (*h/16); i++){
+		for(int i = 0; i < (*h/16)-1; i++){
 			__syncthreads();
 			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
 				float gauss_val = 	s_img[0][my_x-1]*gauss[0] +  s_img[1][my_x]*gauss[1] + s_img[2][my_x+1]*gauss[2] +  
@@ -357,7 +357,7 @@ int main(){
 	cudaEventCreate(&stop);
 
 	//image setup
-	Mat img_cv = imread("84_256.jpg");
+	Mat img_cv = imread("1024bug.jpg");
 	//Mat img_cv = imread("4.jpg");
 	Mat gray_img;
 	cvtColor(img_cv, gray_img, CV_BGR2GRAY);

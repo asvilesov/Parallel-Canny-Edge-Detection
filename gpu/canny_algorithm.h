@@ -93,7 +93,7 @@ __global__ void optimized_convolution_filter(int *img, int *conv,  int *phase, i
 	int y_gradient[] = {1,2,1, 0, 0, 0, -1, -2, -1};
 	int x_mag, y_mag;
 
-	__shared__ int s_img[3][1024]; //this is the largest dimension it can be
+	__shared__ int s_img[3][2048]; //this is the largest dimension it can be
 
 	if(blockIdx.x == 0){
 		s_img[0][threadIdx.x] = img[my_y+my_x];
@@ -130,7 +130,7 @@ __global__ void optimized_convolution_filter(int *img, int *conv,  int *phase, i
 		}
 	}
 	else if(blockIdx.x == 15){ //if last block
-		for(int i = 0; i < (*h/16); i++){
+		for(int i = 0; i < (*h/16)-1; i++){
 			__syncthreads();
 			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
 				int x_mag = 	s_img[0][my_x-1]*x_gradient[0] +  s_img[1][my_x]*x_gradient[1] + s_img[2][my_x+1]*x_gradient[2] +  
@@ -206,7 +206,7 @@ __global__ void optimized_gaussian_filter(int *img, int *conv, int *h, int *w, i
 	int my_x = threadIdx.x;
 	int my_y = (blockIdx.x)*((*h/16)*blockDim.x);
 
-	__shared__ int s_img[3][1024]; //this is the largest dimension it can be
+	__shared__ int s_img[3][2048]; //this is the largest dimension it can be
 
 	if(blockIdx.x == 0){
 		s_img[0][threadIdx.x] = img[my_y+my_x];
@@ -246,7 +246,7 @@ __global__ void optimized_gaussian_filter(int *img, int *conv, int *h, int *w, i
 		}
 	}
 	else if(blockIdx.x == 15){ //if last block
-		for(int i = 0; i < (*h/16); i++){
+		for(int i = 0; i < (*h/16)-1; i++){
 			__syncthreads();
 			if(threadIdx.x != 0 && threadIdx.x != blockDim.x -1){
 				float gauss_val = 	s_img[0][my_x-1]*gauss[0] +  s_img[1][my_x]*gauss[1] + s_img[2][my_x+1]*gauss[2] +  
@@ -345,14 +345,14 @@ __global__ void clean_up(int *img, int* padding){
 	}
 }
 
-float canny_edge_detector(Mat gray_img, bool optimize){
+float canny_edge_detector_benchmark(Mat gray_img, bool optimize, bool show_pic, bool debug){
 	int height = gray_img.rows;
 	int width = gray_img.cols;
 	int *height_p = &height;
 	int *width_p = &width;
 	//Canny Edge Filter Parameters
-	int high = 100;
-	int low = 50;
+	int high = 70;
+	int low = 30;
 	int *h_p = &high;
 	int *l_p = &low;
 
@@ -439,6 +439,7 @@ float canny_edge_detector(Mat gray_img, bool optimize){
 
 	// invoke hysteresis
 	int count = 0;
+	flag = 1;
 	while(flag == 1){
 		count++;
 		flag = 0;
@@ -458,20 +459,24 @@ float canny_edge_detector(Mat gray_img, bool optimize){
 	cudaEventDestroy(start);
 	cudaEventDestroy(stop);
 
-	namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
-    imshow( "Display window", gray_img);                   // Show our image inside it.
+	if(show_pic){
+		namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
+	    imshow( "Display window", gray_img);                   // Show our image inside it.
 
-    for(i = 0; i < height*width; i++){
-		gray_img.at<uchar>(int(i/width), i%width) = conv_img[i];
+	    for(i = 0; i < height*width; i++){
+			gray_img.at<uchar>(int(i/width), i%width) = conv_img[i];
+		}
+
+	    namedWindow( "Convolution Image", WINDOW_AUTOSIZE);
+	    imshow("Convolution Image", gray_img);
+
+	    waitKey(0); // Wait for a keystroke in the window
 	}
 
-    namedWindow( "Convolution Image", WINDOW_AUTOSIZE);
-    imshow("Convolution Image", gray_img);
-
-    waitKey(0); // Wait for a keystroke in the window
-
-    cudaError_t error = cudaGetLastError();
-	printf("error: %s\n", cudaGetErrorString(error));
+	if(debug){
+	    cudaError_t error = cudaGetLastError();
+		printf("error: %s\n", cudaGetErrorString(error));
+	}
 
     //Deallocate all memory
 	delete[] img;
@@ -487,6 +492,194 @@ float canny_edge_detector(Mat gray_img, bool optimize){
 
 	return time_execute;
 }
+
+float canny_edge_detector_analysis(Mat gray_img, float *gauss_time, float *gradient_time, float *non_max_suppression_time, float *thresholding_time, float *hystersis_time, int *depth_bfs, bool optimize, bool show_pic, bool debug){
+
+	int height = gray_img.rows;
+	int width = gray_img.cols;
+	int *height_p = &height;
+	int *width_p = &width;
+	//Canny Edge Filter Parameters
+	int high = 70;
+	int low = 30;
+	int *h_p = &high;
+	int *l_p = &low;
+
+	int *img = new int[height*width];
+	int *conv_img = new int[height*width];
+	int *phase_img = new int[height*width];
+
+	//Convert to 1D array
+	int i = 0;
+	for(i = 0; i < height*width; i++){
+		img[i] = gray_img.at<uchar>(int(i/width), i%width);
+	}
+
+	//Kernel Setup
+	int kernel_size = 3;
+	int padd = (kernel_size-1)/2;
+	int *kernel_p = &kernel_size;
+	int *padd_p = &padd;
+
+	//Malloc
+	int *gpu_img, *gpu_conv_img, *gpu_phase_img, *gpu_padd, *gpu_h, *gpu_w, *gpu_height, *gpu_width;
+	cudaMalloc((void**)&gpu_img, sizeof(int)*height*width);
+	cudaMalloc((void**)&gpu_conv_img, sizeof(int)*height*width);
+	cudaMalloc((void**)&gpu_phase_img, sizeof(int)*height*width);
+	cudaMalloc((void**)&gpu_padd, sizeof(int));
+	cudaMalloc((void**)&gpu_h, sizeof(int));
+	cudaMalloc((void**)&gpu_w, sizeof(int));
+	cudaMalloc((void**)&gpu_height, sizeof(int));
+	cudaMalloc((void**)&gpu_width, sizeof(int));
+
+	//Send to GPU
+	cudaMemcpy(gpu_img, img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_conv_img, img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_phase_img, phase_img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_padd, padd_p, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_h, h_p, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_w, l_p, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_height, height_p, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_width, width_p, sizeof(int), cudaMemcpyHostToDevice);
+
+	//timing setup
+	cudaEvent_t start, stop;
+	float time_execute = 0;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
+	//start timer
+	cudaEventRecord(start, 0);
+
+	//----------- Start Canny Algorithm -----------
+	
+	//GPU setup
+	dim3 dimGrid2(height-2*padd);
+	dim3 dimBlock2(width-2*padd);
+
+	if(optimize){
+
+		dim3 dimGrid(16);
+		dim3 dimBlock(width);
+
+		//invoke Gauss Kernel
+		optimized_gaussian_filter<<<dimGrid, dimBlock>>>(gpu_conv_img, gpu_img, gpu_height, gpu_width, gpu_padd);
+		cudaEventRecord(stop, 0);
+		cudaEventSynchronize(stop);
+		cudaEventElapsedTime(&time_execute, start, stop);
+		*gauss_time += time_execute;
+		//invoke Sobel Kernel
+		cudaEventRecord(start, 0);
+		optimized_convolution_filter<<<dimGrid, dimBlock>>> (gpu_conv_img, gpu_img, gpu_phase_img, gpu_height, gpu_width, gpu_padd);
+		cudaEventRecord(stop, 0);
+		cudaEventSynchronize(stop);
+		cudaEventElapsedTime(&time_execute, start, stop);
+		*gradient_time += time_execute;
+
+	}
+	else{
+		//invoke Gauss Kernel
+		gaussian_filter<<<dimGrid2, dimBlock2>>> (gpu_img, gpu_conv_img, gpu_padd);
+		cudaEventRecord(stop, 0);
+		cudaEventSynchronize(stop);
+		cudaEventElapsedTime(&time_execute, start, stop);
+		*gauss_time += time_execute;
+		//invoke Sobel Kernel
+		cudaEventRecord(start, 0);
+		convolution_kernel<<<dimGrid2, dimBlock2>>> (gpu_conv_img, gpu_img, gpu_phase_img, gpu_h, gpu_w, gpu_padd);
+		cudaEventRecord(stop, 0);
+		cudaEventSynchronize(stop);
+		cudaEventElapsedTime(&time_execute, start, stop);
+		*gradient_time += time_execute;
+	}
+	
+	cudaEventRecord(start, 0);
+	cudaMemcpy(conv_img, gpu_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+
+	// invoke non-max suppression
+	int *gpu_new_img;
+	cudaMalloc((void**)&gpu_new_img, sizeof(int)*height*width);
+	cudaMemcpy(gpu_new_img, conv_img, sizeof(int)*height*width, cudaMemcpyHostToDevice);
+	non_max_suppression<<<dimGrid2, dimBlock2>>> (gpu_img, gpu_new_img, gpu_phase_img, gpu_padd);
+	cudaEventRecord(stop, 0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&time_execute, start, stop);
+	*non_max_suppression_time += time_execute;
+
+	// invoke thresholding
+	cudaEventRecord(start, 0);
+	thresholding<<<dimGrid2, dimBlock2>>> (gpu_new_img, gpu_padd, gpu_h, gpu_w);
+	cudaEventRecord(stop, 0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&time_execute, start, stop);
+	cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+	*thresholding_time += time_execute;
+
+	// invoke hysteresis
+	cudaEventRecord(start, 0);
+	int count = 0;
+	//printf("The flag is: %i\n", flag );
+	flag = 1;
+	while(flag == 1){
+		count++;
+		flag = 0;
+		hystersis<<<dimGrid2, dimBlock2>>> (gpu_new_img, gpu_padd);
+		cudaDeviceSynchronize();
+	}
+	*depth_bfs += count;
+	//printf("The count for the hysteresis function is: %i\n", count);
+
+	// cleanup Image
+	clean_up<<<dimGrid2, dimBlock2>>> (gpu_new_img, gpu_padd);
+	cudaMemcpy(conv_img, gpu_new_img, sizeof(int)*height*width, cudaMemcpyDeviceToHost);
+
+	cudaEventRecord(stop, 0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&time_execute, start, stop);
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
+	*hystersis_time += time_execute;
+
+	//----------- End Canny Algorithm -----------
+
+	if(show_pic){
+		namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
+	    imshow( "Display window", gray_img);                   // Show our image inside it.
+	}
+	
+	for(i = 0; i < height*width; i++){
+			gray_img.at<uchar>(int(i/width), i%width) = conv_img[i];
+		}
+	
+	if(show_pic){
+	    namedWindow( "Convolution Image", WINDOW_AUTOSIZE);
+	    imshow("Convolution Image", gray_img);
+
+	    waitKey(0); // Wait for a keystroke in the window
+	}
+
+
+	if(debug){
+	    cudaError_t error = cudaGetLastError();
+		printf("error: %s\n", cudaGetErrorString(error));
+	}
+
+    //Deallocate all memory
+	delete[] img;
+	delete[] conv_img;
+	delete[] phase_img;
+	cudaFree(gpu_img);
+	cudaFree(gpu_conv_img);
+	cudaFree(gpu_padd);
+	cudaFree(gpu_h);
+	cudaFree(gpu_w);
+	cudaFree(gpu_phase_img);
+	cudaFree(gpu_new_img);
+
+	return time_execute;
+}
+
+
 
 
 
