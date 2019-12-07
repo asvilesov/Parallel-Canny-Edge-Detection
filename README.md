@@ -10,19 +10,17 @@ sudo apt-get upgrade
 
 sudo apt-get install libopencv-dev
 
-
-SERIAL compilation command
-
-g++ serial.cpp -o output 'pkg-config --cflags --libs opencv' 
-
-
-
-
-
 CPU code instructions
 
+To compile: make
 
+to run serial
 
+`./output`
+
+to run parallel
+
+`./p_output'
 
 
 
