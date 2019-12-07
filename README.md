@@ -1,6 +1,7 @@
 # Parallel-Canny-Edge-Detection
 
 ### Installation requirements and instructions:
+On Linux:
 `sudo apt-get update ` </br> ` sudo apt-get upgrade ` </br> ` sudo apt-get install libopencv-dev`
 
 ##### CPU code instructions
