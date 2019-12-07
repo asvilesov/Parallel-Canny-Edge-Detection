@@ -44,7 +44,12 @@ To run detailed timing analysis for various tages of optimized Canny: ./canny_te
 
 
 
-WARNING:
+WARNINGs:
+
+The GPU code can only run for images that are of size equal to or less than 1024x1024
+
+The optimized GPU code will not have speedup if one is using more than 16 Streaming Multiprocessors.
+
 A bug in the GPU code that has not been resolved is running optimized canny on 1024x1024 images in a dataset. 
 
 
