@@ -3,23 +3,18 @@ CPU and GPU based parallelism
 
 
 Installation requirements and instructions:
-
-sudo apt-get update
-
+`sudo apt-get update
 sudo apt-get upgrade
-
-sudo apt-get install libopencv-dev
+sudo apt-get install libopencv-dev`
 
 CPU code instructions
 
 To compile: make
 
 to run serial
-
 `./output`
 
 to run parallel
-
 `./p_output`
 
 
