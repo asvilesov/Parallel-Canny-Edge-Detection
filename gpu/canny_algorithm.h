@@ -27,6 +27,7 @@ using namespace std;
 
 __device__ __managed__ int flag = 1; // 0 if unchanged, 1 if changed in the Hystersis+thresholding function
 
+//type2str function taken from openCV opensource code
 string type2str(int type) {
   string r;
 
@@ -62,10 +63,7 @@ __global__ void convolution_kernel(int *img, int *conv, int *phase, int *h, int 
 
 	*padding = 1;
 
-	//remove the 0 multiplications... they are useless
-	// x_mag = img[my_y*(*padding-1)+my_x+*padding-1]*x_gradient[0] +  img[my_y*(*padding-1)+my_x+*padding]*x_gradient[1] + img[my_y*(*padding-1)+my_x+*padding+1]*x_gradient[2] +  
-	// 		img[my_y*(*padding)+my_x+*padding-1]*x_gradient[3] +  img[my_y*(*padding)+my_x+*padding]*x_gradient[4] + img[my_y*(*padding)+my_x+*padding+1]*x_gradient[5] + 
-	// 		img[my_y*(*padding+1)+my_x+*padding-1]*x_gradient[6] +  img[my_y*(*padding+1)+my_x+*padding]*x_gradient[7] + img[my_y*(*padding+1)+my_x+*padding+1]*x_gradient[8];
+	//can remove the 0 multiplications... 
 	x_mag = img[(my_y-blockDim.x-2*(*padding))+my_x+*padding-1]*x_gradient[0] +  img[(my_y-blockDim.x-2*(*padding))+my_x+*padding]*x_gradient[1] + img[(my_y-blockDim.x-2*(*padding))+my_x+*padding+1]*x_gradient[2] +  
 			img[my_y+my_x+*padding-1]*x_gradient[3] +  img[my_y+my_x+*padding]*x_gradient[4] + img[my_y+my_x+*padding+1]*x_gradient[5] + 
 			img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1]*x_gradient[6] +  img[(my_y+blockDim.x+2*(*padding))+my_x+*padding]*x_gradient[7] + img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]*x_gradient[8];
@@ -73,10 +71,6 @@ __global__ void convolution_kernel(int *img, int *conv, int *phase, int *h, int 
 	y_mag = img[(my_y-blockDim.x-2*(*padding))+my_x+*padding-1]*y_gradient[0] +  img[(my_y-blockDim.x-2*(*padding))+my_x+*padding]*y_gradient[1] + img[(my_y-blockDim.x-2*(*padding))+my_x+*padding+1]*y_gradient[2] +  
 			img[my_y+my_x+*padding-1]*y_gradient[3] +  img[my_y+my_x+*padding]*y_gradient[4] + img[my_y+my_x+*padding+1]*y_gradient[5] + 
 			img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1]*y_gradient[6] +  img[(my_y+blockDim.x+2*(*padding))+my_x+*padding]*y_gradient[7] + img[(my_y+blockDim.x+2*(*padding))+my_x+*padding+1]*y_gradient[8];
-
-	// if (int(sqrt(float(y_mag*y_mag))) > 255){
-	// 	y_mag = 0;
-	// }
 
 	conv[(my_y) + my_x + *padding] = int(sqrt(float(y_mag*y_mag)+ float(x_mag*x_mag))/758*255); //CUDA only accpets floats/double in fp operations
 	float phase_angle = atan2(float(y_mag), float(x_mag)) * 180 / (atan(1.0)*4);
@@ -93,7 +87,7 @@ __global__ void optimized_convolution_filter(int *img, int *conv,  int *phase, i
 	int y_gradient[] = {1,2,1, 0, 0, 0, -1, -2, -1};
 	int x_mag, y_mag;
 
-	__shared__ int s_img[3][2048]; //this is the largest dimension it can be
+	__shared__ int s_img[3][2048]; //this is the largest dimension it can be, array parameters have to be static within a Kernel
 
 	if(blockIdx.x == 0){
 		s_img[0][threadIdx.x] = img[my_y+my_x];
@@ -319,7 +313,7 @@ __global__ void hystersis(int*img, int*padding){
 			flag = 1;
 		}
 
-		//Should this be an or or and and operator?
+		//Switch commented code to have short hysteresis BFS search like in CPU code
 		if( (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding-1] == 0) && (img[(my_y-blockDim.x-2*(*padding))+my_x+*padding]== 0) && 
 			(img[(my_y-blockDim.x-2*(*padding))+my_x+*padding+1] == 0) && (img[my_y+my_x+*padding-1] == 0) &&
 			(img[(my_y+blockDim.x+2*(*padding))+my_x+*padding-1] == 0) && (img[my_y+my_x+*padding+1] == 0) &&
@@ -467,8 +461,8 @@ float canny_edge_detector_benchmark(Mat gray_img, bool optimize, bool show_pic, 
 			gray_img.at<uchar>(int(i/width), i%width) = conv_img[i];
 		}
 
-	    namedWindow( "Convolution Image", WINDOW_AUTOSIZE);
-	    imshow("Convolution Image", gray_img);
+	    namedWindow( "Canny Image", WINDOW_AUTOSIZE);
+	    imshow("Canny Image", gray_img);
 
 	    waitKey(0); // Wait for a keystroke in the window
 	}
@@ -652,8 +646,8 @@ float canny_edge_detector_analysis(Mat gray_img, float *gauss_time, float *gradi
 		}
 	
 	if(show_pic){
-	    namedWindow( "Convolution Image", WINDOW_AUTOSIZE);
-	    imshow("Convolution Image", gray_img);
+	    namedWindow( "Canny Image", WINDOW_AUTOSIZE);
+	    imshow("Canny Image", gray_img);
 
 	    waitKey(0); // Wait for a keystroke in the window
 	}
@@ -678,21 +672,3 @@ float canny_edge_detector_analysis(Mat gray_img, float *gauss_time, float *gradi
 
 	return time_execute;
 }
-
-
-
-
-
-// int main(){
-
-// 	//image setup
-	
-// 	//Mat img_cv = imread("test.png");
-// 	Mat img_cv = imread("4.jpg");
-// 	Mat gray_img;
-// 	cvtColor(img_cv, gray_img, CV_BGR2GRAY);
-
-
-// 	printf("Total time of execution: %f\n", canny_edge_detector(gray_img));
-	
-// }

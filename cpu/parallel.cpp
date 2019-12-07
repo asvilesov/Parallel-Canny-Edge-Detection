@@ -70,7 +70,7 @@ void gaussian_kernel(float** gauss, int padd, float sigma){
 
 void gaussian_blur(float **img, float **blur_img, float **gauss, int h, int w, int k_size){
     int padd = k_size/2;
-    omp_set_num_threads(8); // Use 4 threads for all consecutive parallel regions
+    omp_set_num_threads(16); // Use 4 threads for all consecutive parallel regions
     #pragma omp parallel for
     for (int i=padd; i<h-padd; i++){
         for (int j=padd; j<w-padd; j++){
@@ -100,7 +100,7 @@ void sobel_filter(float **img, float **sobel_img, float **theta, int h, int w){
         {-1, -2, -1}
     };
 
-    omp_set_num_threads(8); // Use 4 threads for all consecutive parallel regions
+    omp_set_num_threads(16); // Use 4 threads for all consecutive parallel regions
     #pragma omp parallel for
     for(int i=padd; i<h-padd; i++){
         for(int j=padd; j<w-padd; j++){
@@ -123,7 +123,7 @@ void sobel_filter(float **img, float **sobel_img, float **theta, int h, int w){
 
 void non_max_suppression(float **img, float **Z, float**theta, int h, int w){
     int padd = 1;
-    omp_set_num_threads(8); // Use 4 threads for all consecutive parallel regions
+    omp_set_num_threads(16); // Use 4 threads for all consecutive parallel regions
     #pragma omp parallel for
     for(int i=padd; i<h-padd; i++){
         for(int j=padd; j<w-padd; j++){
@@ -164,7 +164,7 @@ void non_max_suppression(float **img, float **Z, float**theta, int h, int w){
 
 void double_threshold(float **img, float **out_img, float**theta, int h, int w, float low_thres = 50, float high_thres = 100){
     int padd = 1;
-    omp_set_num_threads(8); // Use 4 threads for all consecutive parallel regions
+    omp_set_num_threads(16); // Use 4 threads for all consecutive parallel regions
     #pragma omp parallel for
     for(int i=padd; i<h-padd; i++){
         for(int j=padd; j<w-padd; j++){
@@ -187,7 +187,7 @@ void hysteresis(float **out_img, int h, int w, float low_thres = 50, float high_
     while(changed){
         changed = false;
         int padd = 1;
-        omp_set_num_threads(8); // Use 4 threads for all consecutive parallel regions
+        omp_set_num_threads(16); // Use 4 threads for all consecutive parallel regions
         #pragma omp parallel for shared(changed)
         for(int i=padd; i<h-padd; i++){
             for(int j=padd; j<w-padd; j++){
@@ -216,7 +216,7 @@ void visualize(float ** raw_img, int height, int width){
  //    printf("Image size: %i %i \n", blurred_img.rows, blurred_img.cols);
  //    string ty2 =  type2str( blurred_img.type() );
     // cout << "type: " << ty2 << endl; 
-    omp_set_num_threads(8); // Use 4 threads for all consecutive parallel regions
+    omp_set_num_threads(16); // Use 4 threads for all consecutive parallel regions
     #pragma omp parallel for
     for(int i = 0; i < height; i++){
         for(int j = 0; j < width; j++){
@@ -315,6 +315,7 @@ void test_dataset(vector<String> filenames, string saveFolder = ""){
     avg_time = tot_time / filenames.size();
     printf("Average Canny Execution time = %f sec\n", avg_time);    
     printf("Average FPS is: %f\n", (filenames.size())/tot_time);
+    //printf("%f\n", avg_time);    
 
     for(int i = 0; i < height; ++i){
         delete img[i];
@@ -334,10 +335,15 @@ void test_dataset(vector<String> filenames, string saveFolder = ""){
 }
 
 int main(){
-    String folderpath = "../images/1024x1024/*.jpg";
-    string saveFolder = "";
-    vector<String> filenames;
-    cv::glob(folderpath, filenames);
-    test_dataset(filenames, saveFolder);
+    int size = 64;
+    for(int i=1; i<6; i++){
+        String folderpath = "../images/" + to_string(size) + "x" + to_string(size) + "/*.jpg";
+        // cout<<folderpath<<endl;
+        string saveFolder = "";
+        vector<String> filenames;
+        cv::glob(folderpath, filenames);
+        test_dataset(filenames, saveFolder);
+        size = size * 2;
+    }
     return 0;
 }

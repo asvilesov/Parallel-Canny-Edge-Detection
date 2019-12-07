@@ -298,6 +298,7 @@ void test_dataset(vector<String> filenames, string saveFolder = ""){
     avg_time = tot_time / filenames.size();
     printf("Average Canny Execution time = %f sec\n", avg_time);    
     printf("Average FPS is: %f\n", (filenames.size())/tot_time);
+    // printf("%f\n", avg_time);    
 
     for(int i = 0; i < height; ++i){
         delete img[i];
@@ -317,10 +318,15 @@ void test_dataset(vector<String> filenames, string saveFolder = ""){
 }
 
 int main(){
-    String folderpath = "../images/1024x1024/*.jpg";
-    string saveFolder = "";
-    vector<String> filenames;
-    cv::glob(folderpath, filenames);
-    test_dataset(filenames, saveFolder);
+    int size = 64;
+    for(int i=1; i<6; i++){
+        String folderpath = "../images/" + to_string(size) + "x" + to_string(size) + "/*.jpg";
+        // cout<<folderpath<<endl;
+        string saveFolder = "";
+        vector<String> filenames;
+        cv::glob(folderpath, filenames);
+        test_dataset(filenames, saveFolder);
+        size = size * 2;
+    }
     return 0;
 }
