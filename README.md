@@ -20,7 +20,7 @@ to run serial
 
 to run parallel
 
-`./p_output'
+`./p_output`
 
 
 
@@ -28,17 +28,17 @@ GPU code instructions
 
 Navigate into gpu directoy: cd gpu
 
-Compile: make
+To compile: make
 
-To show an image of what the result of the Canny algorithm is with GPU code execute: ./canny_show_img
+To show an image of what the result of the Canny algorithm is with GPU code execute: `./canny_show_img`
 
-To run total time benchmark for unoptimized Canny: ./canny_data_uo
+To run total time benchmark for unoptimized Canny: `./canny_data_uo`
 
-To run total time benchmark for optimized Canny: ./canny_data_o
+To run total time benchmark for optimized Canny: `./canny_data_o`
 
-To run detailed timing analysis for various tages of unoptimized Canny: ./canny_test_analysis_uo
+To run detailed timing analysis for various tages of unoptimized Canny: `./canny_test_analysis_uo`
 
-To run detailed timing analysis for various tages of optimized Canny: ./canny_test_analysis_o
+To run detailed timing analysis for various tages of optimized Canny: `./canny_test_analysis_o`
 
 
 
